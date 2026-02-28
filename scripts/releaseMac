@@ -1,0 +1,334 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_PATH="${ROOT_DIR}/AvdBuddy.xcodeproj"
+SCHEME="AvdBuddy"
+ENV_FILE="${ROOT_DIR}/.env"
+ENV_FILE_ENC="${ROOT_DIR}/.env.enc"
+DEFAULT_RELEASE_REPO="alexstyl/avdbuddy"
+DEFAULT_OUTPUT_DIR="${ROOT_DIR}/output"
+
+load_env_file() {
+  if [[ -f "${ENV_FILE}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${ENV_FILE}"
+    set +a
+    return 0
+  fi
+
+  if [[ -f "${ENV_FILE_ENC}" ]]; then
+    require_cmd sops
+    set -a
+    # shellcheck disable=SC1090
+    source <(sops decrypt --input-type dotenv --output-type dotenv "${ENV_FILE_ENC}")
+    set +a
+  fi
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "error: Missing command: $1" >&2
+    exit 1
+  fi
+}
+
+fail() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+normalize_semver() {
+  local raw="$1"
+  local normalized="${raw#v}"
+  if [[ "${normalized}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf "%s\n" "${normalized}"
+    return 0
+  fi
+  return 1
+}
+
+semver_gt() {
+  local left="$1"
+  local right="$2"
+  local sorted
+  sorted="$(printf "%s\n%s\n" "${left}" "${right}" | sort -V)"
+  local first
+  first="$(printf "%s\n" "${sorted}" | head -n1)"
+  [[ "${first}" == "${right}" && "${left}" != "${right}" ]]
+}
+
+build_from_version() {
+  local version="$1"
+  local major minor patch
+  IFS='.' read -r major minor patch <<<"${version}"
+  printf "%d\n" "$((major * 10000 + minor * 100 + patch))"
+}
+
+latest_remote_semver_tag() {
+  local remote_url="git@github.com:${RELEASE_REPO}.git"
+  git ls-remote --tags --refs "${remote_url}" \
+    | awk '{print $2}' \
+    | sed 's#refs/tags/##' \
+    | sed 's/^v//' \
+    | rg '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -V \
+    | tail -n1
+}
+
+remote_tag_exists() {
+  local tag="$1"
+  local remote_url="git@github.com:${RELEASE_REPO}.git"
+  [[ -n "$(git ls-remote --tags --refs "${remote_url}" "refs/tags/${tag}")" ]]
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/releaseMac [--version <x.y.z>] [--build <number>] [options]
+
+Versioning:
+  --version, --v <value> Marketing version (CFBundleShortVersionString), e.g. 1.2.3
+  --build <value>        Optional build number override (CFBundleVersion)
+
+Optional:
+  --repo <owner/name>    GitHub repo for release assets (default: alexstyl/avdbuddy)
+  --notes-file <path>    Release notes markdown file for the GitHub release body
+  --output-dir <path>    Output directory for artifacts
+  --dry-run              Build and package locally, but do not publish
+  --skip-gh-release      Skip GitHub release creation/upload
+  --skip-notarization    Skip notarization and stapling
+  -h, --help             Show this help
+
+Environment:
+  .env or .env.enc may provide:
+    GITHUB_TOKEN / GH_TOKEN
+    RELEASE_REPO
+    NOTARY_APPLE_ID
+    NOTARY_TEAM_ID
+    NOTARY_PASSWORD
+    RELEASE_SIGN_IDENTITY
+EOF
+}
+
+load_env_file
+
+VERSION=""
+BUILD_OVERRIDE=""
+RELEASE_REPO="${RELEASE_REPO:-${DEFAULT_RELEASE_REPO}}"
+OUTPUT_DIR="${DEFAULT_OUTPUT_DIR}"
+NOTES_FILE=""
+DRY_RUN=false
+SKIP_GH_RELEASE=false
+SKIP_NOTARIZATION=false
+NOTARY_APPLE_ID="${NOTARY_APPLE_ID:-}"
+NOTARY_TEAM_ID="${NOTARY_TEAM_ID:-}"
+NOTARY_PASSWORD="${NOTARY_PASSWORD:-}"
+RELEASE_SIGN_IDENTITY="${RELEASE_SIGN_IDENTITY:-}"
+GITHUB_TOKEN_CONFIG="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version|--v)
+      VERSION="${2:-}"
+      shift 2
+      ;;
+    --build)
+      BUILD_OVERRIDE="${2:-}"
+      shift 2
+      ;;
+    --repo)
+      RELEASE_REPO="${2:-}"
+      shift 2
+      ;;
+    --notes-file)
+      NOTES_FILE="${2:-}"
+      shift 2
+      ;;
+    --output-dir)
+      OUTPUT_DIR="${2:-}"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --skip-gh-release)
+      SKIP_GH_RELEASE=true
+      shift
+      ;;
+    --skip-notarization)
+      SKIP_NOTARIZATION=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "Unknown argument: $1"
+      ;;
+  esac
+done
+
+[[ -f "${PROJECT_PATH}/project.pbxproj" ]] || fail "Xcode project not found: ${PROJECT_PATH}"
+if [[ -n "${NOTES_FILE}" && ! -f "${NOTES_FILE}" ]]; then
+  fail "--notes-file not found: ${NOTES_FILE}"
+fi
+
+require_cmd xcodebuild
+require_cmd git
+require_cmd ditto
+require_cmd xcrun
+require_cmd rg
+
+if [[ "${DRY_RUN}" == false && "${SKIP_GH_RELEASE}" == false ]]; then
+  require_cmd gh
+fi
+
+if [[ -n "${GITHUB_TOKEN_CONFIG}" ]]; then
+  export GITHUB_TOKEN="${GITHUB_TOKEN_CONFIG}"
+  export GH_TOKEN="${GITHUB_TOKEN_CONFIG}"
+fi
+
+LATEST_VERSION="$(latest_remote_semver_tag || true)"
+
+if [[ -z "${VERSION}" ]]; then
+  if [[ -n "${LATEST_VERSION}" ]]; then
+    read -r -p "What version do you want to ship? (last version was ${LATEST_VERSION}): " VERSION
+  else
+    read -r -p "What version do you want to ship? (no previous semver tag found): " VERSION
+  fi
+fi
+
+VERSION="$(normalize_semver "${VERSION}")" || fail "--version must look like x.y.z (optionally prefixed with v)"
+
+if [[ -n "${LATEST_VERSION}" ]] && semver_gt "${LATEST_VERSION}" "${VERSION}"; then
+  fail "version ${VERSION} must be greater than or equal to latest tag ${LATEST_VERSION}"
+fi
+
+if remote_tag_exists "${VERSION}"; then
+  fail "version ${VERSION} has already been released (tag exists)"
+fi
+
+BUILD="$(build_from_version "${VERSION}")"
+if [[ -n "${BUILD_OVERRIDE}" ]]; then
+  [[ "${BUILD_OVERRIDE}" =~ ^[0-9]+$ ]] || fail "--build must be an integer"
+  BUILD="${BUILD_OVERRIDE}"
+fi
+
+mkdir -p "${OUTPUT_DIR}"
+DERIVED_DATA="${ROOT_DIR}/.derivedData/release-${VERSION}-${BUILD}"
+ARCHIVE_NAME="AvdBuddy-${VERSION}"
+APP_NAME="AvdBuddy.app"
+APP_PATH="${DERIVED_DATA}/Build/Products/Release/${APP_NAME}"
+STAGING_DIR="${DERIVED_DATA}/release-staging"
+STAGED_APP_PATH="${STAGING_DIR}/${APP_NAME}"
+ZIP_PATH="${OUTPUT_DIR}/${ARCHIVE_NAME}.zip"
+NOTARIZE_ZIP_PATH="${DERIVED_DATA}/${ARCHIVE_NAME}-notarize.zip"
+TAG_NAME="${VERSION}"
+TITLE="AvdBuddy ${VERSION} (${BUILD})"
+
+echo "==> Building macOS app"
+echo "    version: ${VERSION}"
+echo "    build:   ${BUILD}"
+echo "    derived: ${DERIVED_DATA}"
+
+XCODEBUILD_ARGS=(
+  -project "${PROJECT_PATH}"
+  -scheme "${SCHEME}"
+  -configuration Release
+  -destination "platform=macOS"
+  -derivedDataPath "${DERIVED_DATA}"
+  "MARKETING_VERSION=${VERSION}"
+  "CURRENT_PROJECT_VERSION=${BUILD}"
+  build
+)
+
+if [[ "${DRY_RUN}" == true ]]; then
+  XCODEBUILD_ARGS+=(
+    CODE_SIGNING_ALLOWED=NO
+    CODE_SIGNING_REQUIRED=NO
+  )
+else
+  XCODEBUILD_ARGS+=(
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+    DEPLOYMENT_POSTPROCESSING=YES
+    STRIP_INSTALLED_PRODUCT=YES
+    COPY_PHASE_STRIP=YES
+    "OTHER_CODE_SIGN_FLAGS=--timestamp"
+  )
+  if [[ -z "${RELEASE_SIGN_IDENTITY}" ]]; then
+    RELEASE_SIGN_IDENTITY="$(
+      security find-identity -v -p codesigning \
+        | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]][0-9A-F]\{40\}[[:space:]]*"\(Developer ID Application:.*\)".*/\1/p' \
+        | head -n1
+    )"
+  fi
+  [[ -n "${RELEASE_SIGN_IDENTITY}" ]] || fail "No Developer ID Application identity found"
+  [[ "${RELEASE_SIGN_IDENTITY}" == Developer\ ID\ Application:* ]] || fail "RELEASE_SIGN_IDENTITY must be a Developer ID Application certificate"
+fi
+
+/usr/bin/xcodebuild "${XCODEBUILD_ARGS[@]}"
+
+[[ -d "${APP_PATH}" ]] || fail "Built app not found at ${APP_PATH}"
+
+echo "==> Preparing release artifact"
+/bin/rm -rf "${STAGING_DIR}"
+/bin/mkdir -p "${STAGING_DIR}"
+/usr/bin/ditto "${APP_PATH}" "${STAGED_APP_PATH}"
+
+if [[ "${DRY_RUN}" == false && "${SKIP_NOTARIZATION}" == false ]]; then
+  [[ -n "${NOTARY_APPLE_ID}" ]] || fail "NOTARY_APPLE_ID is required"
+  [[ -n "${NOTARY_TEAM_ID}" ]] || fail "NOTARY_TEAM_ID is required"
+  [[ -n "${NOTARY_PASSWORD}" ]] || fail "NOTARY_PASSWORD is required"
+
+  echo "==> Packaging app for notarization"
+  /bin/rm -f "${NOTARIZE_ZIP_PATH}"
+  /usr/bin/ditto -c -k --keepParent "${STAGED_APP_PATH}" "${NOTARIZE_ZIP_PATH}"
+
+  echo "==> Notarizing zip"
+  xcrun notarytool submit "${NOTARIZE_ZIP_PATH}" \
+    --apple-id "${NOTARY_APPLE_ID}" \
+    --team-id "${NOTARY_TEAM_ID}" \
+    --password "${NOTARY_PASSWORD}" \
+    --wait
+
+  echo "==> Stapling app"
+  xcrun stapler staple "${STAGED_APP_PATH}"
+  xcrun stapler validate "${STAGED_APP_PATH}" >/dev/null
+fi
+
+echo "==> Creating final zip"
+/bin/rm -f "${ZIP_PATH}"
+/usr/bin/ditto -c -k --keepParent "${STAGED_APP_PATH}" "${ZIP_PATH}"
+echo "    zip: ${ZIP_PATH}"
+
+if [[ "${DRY_RUN}" == true || "${SKIP_GH_RELEASE}" == true ]]; then
+  echo "==> Skipping GitHub release publish"
+  exit 0
+fi
+
+echo "==> Verifying GitHub auth"
+gh auth status >/dev/null
+
+RELEASE_BODY="Automated macOS release for AvdBuddy."
+if [[ -n "${NOTES_FILE}" ]]; then
+  RELEASE_BODY="$(cat "${NOTES_FILE}")"
+fi
+
+echo "==> Publishing GitHub release"
+if gh release view "${TAG_NAME}" --repo "${RELEASE_REPO}" >/dev/null 2>&1; then
+  gh release upload "${TAG_NAME}" "${ZIP_PATH}" --clobber --repo "${RELEASE_REPO}"
+else
+  gh release create "${TAG_NAME}" \
+    "${ZIP_PATH}" \
+    --title "${TITLE}" \
+    --notes "${RELEASE_BODY}" \
+    --repo "${RELEASE_REPO}"
+fi
+
+echo "==> Release completed"
+echo "    repo: ${RELEASE_REPO}"
+echo "    tag:  ${TAG_NAME}"

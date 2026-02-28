@@ -8,3 +8,7 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 specs/
+.env
+.env.enc
+.derivedData/
+output/
