@@ -268,6 +268,16 @@ else
   fi
   [[ -n "${RELEASE_SIGN_IDENTITY}" ]] || fail "No Developer ID Application identity found"
   [[ "${RELEASE_SIGN_IDENTITY}" == Developer\ ID\ Application:* ]] || fail "RELEASE_SIGN_IDENTITY must be a Developer ID Application certificate"
+  RELEASE_TEAM_ID="${NOTARY_TEAM_ID}"
+  if [[ -z "${RELEASE_TEAM_ID}" && "${RELEASE_SIGN_IDENTITY}" =~ \(([A-Z0-9]{10})\)$ ]]; then
+    RELEASE_TEAM_ID="${BASH_REMATCH[1]}"
+  fi
+  [[ -n "${RELEASE_TEAM_ID}" ]] || fail "Could not determine DEVELOPMENT_TEAM for release signing"
+  XCODEBUILD_ARGS+=(
+    CODE_SIGN_STYLE=Manual
+    "CODE_SIGN_IDENTITY=${RELEASE_SIGN_IDENTITY}"
+    "DEVELOPMENT_TEAM=${RELEASE_TEAM_ID}"
+  )
 fi
 
 /usr/bin/xcodebuild "${XCODEBUILD_ARGS[@]}"
