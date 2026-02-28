@@ -182,6 +182,7 @@ require_cmd git
 require_cmd ditto
 require_cmd xcrun
 require_cmd rg
+require_cmd create-dmg
 
 if [[ "${DRY_RUN}" == false && "${SKIP_GH_RELEASE}" == false ]]; then
   require_cmd gh
@@ -223,10 +224,10 @@ DERIVED_DATA="${ROOT_DIR}/.derivedData/release-${VERSION}-${BUILD}"
 ARCHIVE_NAME="AvdBuddy-${VERSION}"
 APP_NAME="AvdBuddy.app"
 APP_PATH="${DERIVED_DATA}/Build/Products/Release/${APP_NAME}"
-STAGING_DIR="${DERIVED_DATA}/release-staging"
-STAGED_APP_PATH="${STAGING_DIR}/${APP_NAME}"
-ZIP_PATH="${OUTPUT_DIR}/${ARCHIVE_NAME}.zip"
-NOTARIZE_ZIP_PATH="${DERIVED_DATA}/${ARCHIVE_NAME}-notarize.zip"
+DMG_STAGING_DIR="${DERIVED_DATA}/dmg-staging"
+DMG_OUTPUT_DIR="${DERIVED_DATA}/dmg-output"
+STAGED_APP_PATH="${DMG_STAGING_DIR}/${APP_NAME}"
+DMG_PATH="${OUTPUT_DIR}/${ARCHIVE_NAME}.dmg"
 TAG_NAME="${VERSION}"
 TITLE="AvdBuddy ${VERSION} (${BUILD})"
 
@@ -285,35 +286,45 @@ fi
 [[ -d "${APP_PATH}" ]] || fail "Built app not found at ${APP_PATH}"
 
 echo "==> Preparing release artifact"
-/bin/rm -rf "${STAGING_DIR}"
-/bin/mkdir -p "${STAGING_DIR}"
+/bin/rm -rf "${DMG_STAGING_DIR}" "${DMG_OUTPUT_DIR}"
+/bin/mkdir -p "${DMG_STAGING_DIR}" "${DMG_OUTPUT_DIR}"
 /usr/bin/ditto "${APP_PATH}" "${STAGED_APP_PATH}"
+
+echo "==> Creating DMG"
+/bin/rm -f "${DMG_PATH}"
+CREATE_DMG_ARGS=(
+  --overwrite
+  --dmg-title "AvdBuddy"
+)
+if [[ "${DRY_RUN}" == false ]]; then
+  CREATE_DMG_ARGS+=("--identity=${RELEASE_SIGN_IDENTITY}")
+fi
+create-dmg \
+  "${CREATE_DMG_ARGS[@]}" \
+  "${STAGED_APP_PATH}" \
+  "${DMG_OUTPUT_DIR}" >/dev/null
+GENERATED_DMG_PATH="$(find "${DMG_OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dmg' | head -n1)"
+[[ -n "${GENERATED_DMG_PATH}" ]] || fail "create-dmg did not produce a DMG"
+/bin/mv -f "${GENERATED_DMG_PATH}" "${DMG_PATH}"
 
 if [[ "${DRY_RUN}" == false && "${SKIP_NOTARIZATION}" == false ]]; then
   [[ -n "${NOTARY_APPLE_ID}" ]] || fail "NOTARY_APPLE_ID is required"
   [[ -n "${NOTARY_TEAM_ID}" ]] || fail "NOTARY_TEAM_ID is required"
   [[ -n "${NOTARY_PASSWORD}" ]] || fail "NOTARY_PASSWORD is required"
 
-  echo "==> Packaging app for notarization"
-  /bin/rm -f "${NOTARIZE_ZIP_PATH}"
-  /usr/bin/ditto -c -k --keepParent "${STAGED_APP_PATH}" "${NOTARIZE_ZIP_PATH}"
-
-  echo "==> Notarizing zip"
-  xcrun notarytool submit "${NOTARIZE_ZIP_PATH}" \
+  echo "==> Notarizing DMG"
+  xcrun notarytool submit "${DMG_PATH}" \
     --apple-id "${NOTARY_APPLE_ID}" \
     --team-id "${NOTARY_TEAM_ID}" \
     --password "${NOTARY_PASSWORD}" \
     --wait
 
-  echo "==> Stapling app"
-  xcrun stapler staple "${STAGED_APP_PATH}"
-  xcrun stapler validate "${STAGED_APP_PATH}" >/dev/null
+  echo "==> Stapling DMG"
+  xcrun stapler staple "${DMG_PATH}"
+  xcrun stapler validate "${DMG_PATH}" >/dev/null
 fi
 
-echo "==> Creating final zip"
-/bin/rm -f "${ZIP_PATH}"
-/usr/bin/ditto -c -k --keepParent "${STAGED_APP_PATH}" "${ZIP_PATH}"
-echo "    zip: ${ZIP_PATH}"
+echo "    dmg: ${DMG_PATH}"
 
 if [[ "${DRY_RUN}" == true || "${SKIP_GH_RELEASE}" == true ]]; then
   echo "==> Skipping GitHub release publish"
@@ -330,10 +341,10 @@ fi
 
 echo "==> Publishing GitHub release"
 if gh release view "${TAG_NAME}" --repo "${RELEASE_REPO}" >/dev/null 2>&1; then
-  gh release upload "${TAG_NAME}" "${ZIP_PATH}" --clobber --repo "${RELEASE_REPO}"
+  gh release upload "${TAG_NAME}" "${DMG_PATH}" --clobber --repo "${RELEASE_REPO}"
 else
   gh release create "${TAG_NAME}" \
-    "${ZIP_PATH}" \
+    "${DMG_PATH}" \
     --title "${TITLE}" \
     --notes "${RELEASE_BODY}" \
     --repo "${RELEASE_REPO}"
