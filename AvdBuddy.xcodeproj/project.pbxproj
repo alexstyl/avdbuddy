@@ -1,0 +1,576 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		A3134F8E2F532BB3002DCEB6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A3134F782F532BB2002DCEB6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A3134F7F2F532BB2002DCEB6;
+			remoteInfo = AvdBuddy;
+		};
+		A3134F982F532BB3002DCEB6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A3134F782F532BB2002DCEB6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A3134F7F2F532BB2002DCEB6;
+			remoteInfo = AvdBuddy;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A3134F802F532BB2002DCEB6 /* AvdBuddy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AvdBuddy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3134F8D2F532BB3002DCEB6 /* AvdBuddyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AvdBuddyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3134F972F532BB3002DCEB6 /* AvdBuddyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AvdBuddyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A3134F822F532BB2002DCEB6 /* AvdBuddy */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AvdBuddy;
+			sourceTree = "<group>";
+		};
+		A3134F902F532BB3002DCEB6 /* AvdBuddyTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AvdBuddyTests;
+			sourceTree = "<group>";
+		};
+		A3134F9A2F532BB3002DCEB6 /* AvdBuddyUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AvdBuddyUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A3134F7D2F532BB2002DCEB6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F8A2F532BB3002DCEB6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F942F532BB3002DCEB6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A3134F772F532BB2002DCEB6 = {
+			isa = PBXGroup;
+			children = (
+				A3134F822F532BB2002DCEB6 /* AvdBuddy */,
+				A3134F902F532BB3002DCEB6 /* AvdBuddyTests */,
+				A3134F9A2F532BB3002DCEB6 /* AvdBuddyUITests */,
+				A3134F812F532BB2002DCEB6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A3134F812F532BB2002DCEB6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A3134F802F532BB2002DCEB6 /* AvdBuddy.app */,
+				A3134F8D2F532BB3002DCEB6 /* AvdBuddyTests.xctest */,
+				A3134F972F532BB3002DCEB6 /* AvdBuddyUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A3134F7F2F532BB2002DCEB6 /* AvdBuddy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3134FA12F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddy" */;
+			buildPhases = (
+				A3134F7C2F532BB2002DCEB6 /* Sources */,
+				A3134F7D2F532BB2002DCEB6 /* Frameworks */,
+				A3134F7E2F532BB2002DCEB6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A3134F822F532BB2002DCEB6 /* AvdBuddy */,
+			);
+			name = AvdBuddy;
+			packageProductDependencies = (
+			);
+			productName = AvdBuddy;
+			productReference = A3134F802F532BB2002DCEB6 /* AvdBuddy.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A3134F8C2F532BB3002DCEB6 /* AvdBuddyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3134FA42F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddyTests" */;
+			buildPhases = (
+				A3134F892F532BB3002DCEB6 /* Sources */,
+				A3134F8A2F532BB3002DCEB6 /* Frameworks */,
+				A3134F8B2F532BB3002DCEB6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A3134F8F2F532BB3002DCEB6 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A3134F902F532BB3002DCEB6 /* AvdBuddyTests */,
+			);
+			name = AvdBuddyTests;
+			packageProductDependencies = (
+			);
+			productName = AvdBuddyTests;
+			productReference = A3134F8D2F532BB3002DCEB6 /* AvdBuddyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A3134F962F532BB3002DCEB6 /* AvdBuddyUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3134FA72F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddyUITests" */;
+			buildPhases = (
+				A3134F932F532BB3002DCEB6 /* Sources */,
+				A3134F942F532BB3002DCEB6 /* Frameworks */,
+				A3134F952F532BB3002DCEB6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A3134F992F532BB3002DCEB6 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A3134F9A2F532BB3002DCEB6 /* AvdBuddyUITests */,
+			);
+			name = AvdBuddyUITests;
+			packageProductDependencies = (
+			);
+			productName = AvdBuddyUITests;
+			productReference = A3134F972F532BB3002DCEB6 /* AvdBuddyUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A3134F782F532BB2002DCEB6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					A3134F7F2F532BB2002DCEB6 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					A3134F8C2F532BB3002DCEB6 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = A3134F7F2F532BB2002DCEB6;
+					};
+					A3134F962F532BB3002DCEB6 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = A3134F7F2F532BB2002DCEB6;
+					};
+				};
+			};
+			buildConfigurationList = A3134F7B2F532BB2002DCEB6 /* Build configuration list for PBXProject "AvdBuddy" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A3134F772F532BB2002DCEB6;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A3134F812F532BB2002DCEB6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A3134F7F2F532BB2002DCEB6 /* AvdBuddy */,
+				A3134F8C2F532BB3002DCEB6 /* AvdBuddyTests */,
+				A3134F962F532BB3002DCEB6 /* AvdBuddyUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A3134F7E2F532BB2002DCEB6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F8B2F532BB3002DCEB6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F952F532BB3002DCEB6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A3134F7C2F532BB2002DCEB6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F892F532BB3002DCEB6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3134F932F532BB3002DCEB6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A3134F8F2F532BB3002DCEB6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A3134F7F2F532BB2002DCEB6 /* AvdBuddy */;
+			targetProxy = A3134F8E2F532BB3002DCEB6 /* PBXContainerItemProxy */;
+		};
+		A3134F992F532BB3002DCEB6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A3134F7F2F532BB2002DCEB6 /* AvdBuddy */;
+			targetProxy = A3134F982F532BB3002DCEB6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A3134F9F2F532BB3002DCEB6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A3134FA02F532BB3002DCEB6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A3134FA22F532BB3002DCEB6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AvdBuddy launches Android Emulator and ADB, which use your local network to discover and communicate with virtual devices.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A3134FA32F532BB3002DCEB6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AvdBuddy launches Android Emulator and ADB, which use your local network to discover and communicate with virtual devices.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A3134FA52F532BB3002DCEB6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AvdBuddy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AvdBuddy";
+			};
+			name = Debug;
+		};
+		A3134FA62F532BB3002DCEB6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AvdBuddy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AvdBuddy";
+			};
+			name = Release;
+		};
+		A3134FA82F532BB3002DCEB6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = AvdBuddy;
+			};
+			name = Debug;
+		};
+		A3134FA92F532BB3002DCEB6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2W6P54JS62;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alexstyl.avdbuddy.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = AvdBuddy;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A3134F7B2F532BB2002DCEB6 /* Build configuration list for PBXProject "AvdBuddy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3134F9F2F532BB3002DCEB6 /* Debug */,
+				A3134FA02F532BB3002DCEB6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A3134FA12F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3134FA22F532BB3002DCEB6 /* Debug */,
+				A3134FA32F532BB3002DCEB6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A3134FA42F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3134FA52F532BB3002DCEB6 /* Debug */,
+				A3134FA62F532BB3002DCEB6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A3134FA72F532BB3002DCEB6 /* Build configuration list for PBXNativeTarget "AvdBuddyUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3134FA82F532BB3002DCEB6 /* Debug */,
+				A3134FA92F532BB3002DCEB6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A3134F782F532BB2002DCEB6 /* Project object */;
+}
