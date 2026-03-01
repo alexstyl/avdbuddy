@@ -36,10 +36,6 @@ It looks for the SDK in:
 It reads AVDs from:
 - `~/.android/avd`
 
-## License
-
-This project is licensed under the MIT License. See [LICENSE](./LICENSE).
-
 ## Development
 
 Run the test suite:
@@ -53,3 +49,12 @@ Run the app:
 ```bash
 ./scripts/runMac
 ```
+
+
+## Credits
+
+Inspired by [VirtualBuddy](https://github.com/insidegui/VirtualBuddy).
+
+## License
+
+[MIT](./LICENSE) • Alex Styl ([alexstyl](https://x.com/alexstyl))
