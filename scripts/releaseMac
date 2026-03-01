@@ -56,6 +56,54 @@ build_generate_appcast_tool() {
   [[ -x "${SPARKLE_APPCAST_TOOL_PATH}" ]] || fail "generate_appcast not found at ${SPARKLE_APPCAST_TOOL_PATH}"
 }
 
+resign_sparkle_components() {
+  local app_path="$1"
+  local sign_identity="$2"
+  local framework_path="${app_path}/Contents/Frameworks/Sparkle.framework"
+  local framework_version_path="${framework_path}/Versions/B"
+  local nested_paths=(
+    "${framework_version_path}/Autoupdate"
+    "${framework_version_path}/Updater.app"
+    "${framework_version_path}/XPCServices/Downloader.xpc"
+    "${framework_version_path}/XPCServices/Installer.xpc"
+  )
+  local path
+
+  [[ -d "${framework_path}" ]] || return 0
+
+  echo "==> Re-signing Sparkle framework helpers"
+  for path in "${nested_paths[@]}"; do
+    if [[ -e "${path}" ]]; then
+      /usr/bin/codesign \
+        --force \
+        --sign "${sign_identity}" \
+        --timestamp \
+        --options runtime \
+        --preserve-metadata=identifier,entitlements,flags \
+        --generate-entitlement-der \
+        "${path}"
+    fi
+  done
+
+  /usr/bin/codesign \
+    --force \
+    --sign "${sign_identity}" \
+    --timestamp \
+    --options runtime \
+    --preserve-metadata=identifier,entitlements,flags \
+    --generate-entitlement-der \
+    "${framework_version_path}"
+
+  /usr/bin/codesign \
+    --force \
+    --sign "${sign_identity}" \
+    --timestamp \
+    --options runtime \
+    --preserve-metadata=identifier,entitlements,flags \
+    --generate-entitlement-der \
+    "${app_path}"
+}
+
 ensure_clean_worktree() {
   if [[ -n "$(git status --short --untracked-files=no)" ]]; then
     fail "release requires a clean git worktree"
@@ -132,17 +180,13 @@ promote_changelog_release() {
 }
 
 prepare_release_notes() {
-  local version="$1"
-  local release_date="$2"
-  local release_notes_path="$3"
+  local release_notes_path="$1"
 
   [[ -f "${CHANGELOG_PATH}" ]] || fail "CHANGELOG.md not found at ${CHANGELOG_PATH}"
   rg '^## Unreleased$' "${CHANGELOG_PATH}" >/dev/null || fail "CHANGELOG.md is missing the '## Unreleased' heading"
 
   extract_unreleased_changelog "${CHANGELOG_PATH}" > "${release_notes_path}"
   [[ -s "${release_notes_path}" ]] || fail "CHANGELOG.md has no unreleased notes to ship"
-
-  promote_changelog_release "${CHANGELOG_PATH}" "${version}" "${release_date}" "${release_notes_path}"
 }
 
 commit_release_changelog() {
@@ -380,7 +424,7 @@ if [[ -n "${NOTES_FILE}" ]]; then
   /bin/cp -f "${NOTES_FILE}" "${RELEASE_NOTES_PATH}"
 elif [[ "${DRY_RUN}" == false && "${SKIP_GH_RELEASE}" == false ]]; then
   /bin/mkdir -p "${DERIVED_DATA}"
-  prepare_release_notes "${VERSION}" "${RELEASE_DATE}" "${RELEASE_NOTES_PATH}"
+  prepare_release_notes "${RELEASE_NOTES_PATH}"
 fi
 
 echo "==> Building macOS app"
@@ -436,6 +480,10 @@ fi
 /usr/bin/xcodebuild "${XCODEBUILD_ARGS[@]}"
 
 [[ -d "${APP_PATH}" ]] || fail "Built app not found at ${APP_PATH}"
+
+if [[ "${DRY_RUN}" == false ]]; then
+  resign_sparkle_components "${APP_PATH}" "${RELEASE_SIGN_IDENTITY}"
+fi
 
 echo "==> Preparing release artifact"
 /bin/rm -rf "${DMG_STAGING_DIR}" "${DMG_OUTPUT_DIR}"
@@ -511,6 +559,7 @@ if [[ "${DRY_RUN}" == true || "${SKIP_GH_RELEASE}" == true ]]; then
 fi
 
 if [[ -z "${NOTES_FILE}" ]]; then
+  promote_changelog_release "${CHANGELOG_PATH}" "${VERSION}" "${RELEASE_DATE}" "${RELEASE_NOTES_PATH}"
   commit_release_changelog "${VERSION}"
 fi
 push_release_commit_and_tag "${TAG_NAME}"
