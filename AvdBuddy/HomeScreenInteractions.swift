@@ -145,6 +145,7 @@ struct WindowConfigurationView: NSViewRepresentable {
         window.title = "AvdBuddy"
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unifiedCompact
         window.isMovableByWindowBackground = true
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true

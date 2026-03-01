@@ -16,6 +16,7 @@ require_cmd() {
 
 require_cmd xcodebuild
 require_cmd open
+require_cmd pkill
 
 BUILD_SETTINGS_FILE="$(mktemp)"
 trap 'rm -f "${BUILD_SETTINGS_FILE}"' EXIT
@@ -49,4 +50,7 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 1
 fi
 
-open -a "${APP_PATH}" --args "$@"
+APP_BINARY_NAME="${FULL_PRODUCT_NAME%.app}"
+pkill -f "${APP_PATH}/Contents/MacOS/${APP_BINARY_NAME}" >/dev/null 2>&1 || true
+
+open -n -a "${APP_PATH}" --args "$@"

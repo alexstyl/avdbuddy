@@ -24,16 +24,6 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            createFAB
-                .padding(.trailing, 28)
-                .padding(.bottom, 26)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-
-            configButton
-                .padding(.trailing, 24)
-                .padding(.top, 22)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-
             topBanners
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, 18)
@@ -41,6 +31,12 @@ struct ContentView: View {
         }
         .frame(minWidth: 980, minHeight: 680)
         .background(WindowConfigurationView())
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                toolbarSettingsButton
+                toolbarCreateButton
+            }
+        }
         .sheet(isPresented: $isPresentingCreateWizard) {
             CreateAVDSheet(manager: manager)
         }
@@ -120,52 +116,23 @@ struct ContentView: View {
         Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
     }
 
-    @ViewBuilder
-    private var createFAB: some View {
-        if #available(macOS 26.0, *) {
-            Button {
-                presentCreateFlow()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .light))
-                    .frame(width: 48, height: 48)
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .disabled(!manager.isToolchainConfigured)
-        } else {
-            Button {
-                presentCreateFlow()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .light))
-                    .frame(width: 56, height: 56)
-            }
-            .buttonStyle(.borderedProminent)
-            .clipShape(Circle())
-            .disabled(!manager.isToolchainConfigured)
-        }
-    }
-
-    private var configButton: some View {
+    private var toolbarSettingsButton: some View {
         Button {
             isPresentingSDKSetup = true
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 34, height: 34)
         }
-        .buttonStyle(.plain)
-        .background(
-            Circle()
-                .fill(Color.white.opacity(0.08))
-        )
-        .overlay(
-            Circle()
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
         .help("Android SDK Settings")
+    }
+
+    private var toolbarCreateButton: some View {
+        Button {
+            presentCreateFlow()
+        } label: {
+            Image(systemName: "plus")
+        }
+        .disabled(!manager.isToolchainConfigured)
+        .help("Create AVD")
     }
 
     @ViewBuilder
