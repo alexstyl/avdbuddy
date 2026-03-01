@@ -76,7 +76,6 @@ struct EmulatorCard: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .animation(.easeOut(duration: 0.16), value: isHovered)
-        .animation(.easeOut(duration: 0.16), value: isSelected)
     }
 
     private var artwork: some View {
@@ -124,14 +123,14 @@ struct EmulatorCard: View {
 
     private var cardFill: Color {
         if isSelected {
-            return Color.white.opacity(0.09)
+            return Color(nsColor: .controlAccentColor).opacity(0.26)
         }
         return Color.white.opacity(0.055)
     }
 
     private var cardStroke: Color {
         if isSelected {
-            return Color.white.opacity(0.26)
+            return Color(nsColor: .controlAccentColor).opacity(0.95)
         }
         if isHovered {
             return Color.white.opacity(0.18)

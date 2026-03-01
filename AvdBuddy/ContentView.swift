@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var manager = EmulatorManager()
-    @State private var selectedEmulatorIDs: Set<String> = []
+    @State private var selectedEmulatorID: String?
     @State private var hoveredEmulatorID: String?
     @State private var emulatorsPendingDeletion: [EmulatorInstance] = []
     @State private var emulatorPendingRename: EmulatorInstance?
@@ -76,8 +76,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: manager.lastCreatedEmulatorName) { newValue in
-            guard let newValue else { return }
-            selectedEmulatorIDs = [newValue]
+            selectedEmulatorID = newValue
         }
         .onChange(of: manager.isToolchainConfigured) { isConfigured in
             if isConfigured {
@@ -174,13 +173,18 @@ struct ContentView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: gridSpacing) {
                         ForEach(manager.emulators) { emulator in
-                            EmulatorCard(
-                                emulator: emulator,
-                                isSelected: selectedEmulatorIDs.contains(emulator.id),
-                                isHovered: hoveredEmulatorID == emulator.id,
-                                isRunning: manager.isRunning(emulator),
-                                isDeleting: manager.isDeleting(emulator)
-                            )
+                            Button {
+                                selectedEmulatorID = emulator.id
+                            } label: {
+                                EmulatorCard(
+                                    emulator: emulator,
+                                    isSelected: selectedEmulatorID == emulator.id,
+                                    isHovered: hoveredEmulatorID == emulator.id,
+                                    isRunning: manager.isRunning(emulator),
+                                    isDeleting: manager.isDeleting(emulator)
+                                )
+                            }
+                            .buttonStyle(.borderless)
                             .onHover { isHovering in
                                 if isHovering {
                                     hoveredEmulatorID = emulator.id
@@ -188,29 +192,11 @@ struct ContentView: View {
                                     hoveredEmulatorID = nil
                                 }
                             }
-                            .overlay {
-                                CardInteractionView(
-                                    onSingleClick: { modifiers in
-                                        handleSelectionClick(for: emulator, modifiers: modifiers)
-                                    },
-                                    onDoubleClick: {
-                                        selectedEmulatorIDs = [emulator.id]
-                                        guard !manager.isRunning(emulator) else {
-                                            manager.statusMessage = "\(emulator.name) is already running."
-                                            return
-                                        }
-                                        guard manager.isToolchainConfigured else {
-                                            manager.statusMessage = manager.toolchainStatus.actionMessage(for: "Launching an emulator")
-                                            isPresentingSDKSetup = true
-                                            return
-                                        }
-                                        Task { await manager.launch(emulator) }
-                                    },
-                                    onRightClick: {
-                                        handleContextClick(for: emulator)
-                                    },
-                                    menuActions: menuActions(for: emulator)
-                                )
+                            .onTapGesture(count: 2) {
+                                launch(emulator)
+                            }
+                            .contextMenu {
+                                cardContextMenu(for: emulator)
                             }
                         }
                     }
@@ -223,7 +209,7 @@ struct ContentView: View {
                 .scrollIndicators(.hidden)
                 .background {
                     BackgroundInteractionView {
-                        selectedEmulatorIDs.removeAll()
+                        selectedEmulatorID = nil
                     }
                 }
             }
@@ -271,57 +257,13 @@ struct ContentView: View {
         )
     }
 
-    private func handleSelectionClick(for emulator: EmulatorInstance, modifiers: NSEvent.ModifierFlags) {
-        if modifiers.contains(.command) {
-            if selectedEmulatorIDs.contains(emulator.id) {
-                selectedEmulatorIDs.remove(emulator.id)
-            } else {
-                selectedEmulatorIDs.insert(emulator.id)
-            }
-        } else {
-            selectedEmulatorIDs = [emulator.id]
-        }
-    }
-
-    private func handleContextClick(for emulator: EmulatorInstance) {
-        if !selectedEmulatorIDs.contains(emulator.id) {
-            selectedEmulatorIDs = [emulator.id]
-        }
-    }
-
-    private func pendingDeletionTargets(for emulator: EmulatorInstance) -> [EmulatorInstance] {
-        if selectedEmulatorIDs.contains(emulator.id) {
-            let selected = manager.emulators.filter { selectedEmulatorIDs.contains($0.id) }
-            if !selected.isEmpty {
-                return selected
-            }
-        }
-        return [emulator]
-    }
-
     private func delete(_ emulators: [EmulatorInstance]) async {
         for emulator in emulators {
             await manager.delete(emulator)
         }
-        selectedEmulatorIDs.subtract(emulators.map(\.id))
     }
 
     private func menuActions(for emulator: EmulatorInstance) -> [CardMenuAction] {
-        let deletionTargets = pendingDeletionTargets(for: emulator)
-        if deletionTargets.count > 1 {
-            return [
-                CardMenuAction(
-                    title: "Move to Trash",
-                    systemImage: nil,
-                    isDestructive: true,
-                    isEnabled: manager.isToolchainConfigured && !manager.isBusy && deletionTargets.allSatisfy { !manager.isDeleting($0) },
-                    handler: {
-                        emulatorsPendingDeletion = deletionTargets
-                    }
-                )
-            ]
-        }
-
         return [
             CardMenuAction(
                 title: "Show in Finder",
@@ -375,12 +317,45 @@ struct ContentView: View {
                 title: "Move to Trash",
                 systemImage: nil,
                 isDestructive: true,
-                isEnabled: manager.isToolchainConfigured && !manager.isBusy && deletionTargets.allSatisfy { !manager.isDeleting($0) },
+                isEnabled: manager.isToolchainConfigured && !manager.isBusy && !manager.isDeleting(emulator),
                 handler: {
-                    emulatorsPendingDeletion = deletionTargets
+                    emulatorsPendingDeletion = [emulator]
                 }
             )
         ]
+    }
+
+    @ViewBuilder
+    private func cardContextMenu(for emulator: EmulatorInstance) -> some View {
+        ForEach(Array(menuActions(for: emulator).enumerated()), id: \.offset) { _, action in
+            if action.isSeparator {
+                Divider()
+            } else {
+                Button(role: action.isDestructive ? .destructive : nil) {
+                    action.handler()
+                } label: {
+                    if let systemImage = action.systemImage {
+                        Label(action.title, systemImage: systemImage)
+                    } else {
+                        Text(action.title)
+                    }
+                }
+                .disabled(!action.isEnabled)
+            }
+        }
+    }
+
+    private func launch(_ emulator: EmulatorInstance) {
+        guard !manager.isRunning(emulator) else {
+            manager.statusMessage = "\(emulator.name) is already running."
+            return
+        }
+        guard manager.isToolchainConfigured else {
+            manager.statusMessage = manager.toolchainStatus.actionMessage(for: "Launching an emulator")
+            isPresentingSDKSetup = true
+            return
+        }
+        Task { await manager.launch(emulator) }
     }
 
     private func presentCreateFlow() {
