@@ -36,8 +36,16 @@ struct InfoSheet: View {
                 .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(.purple)
 
-                Button("Check for Updates") {
-                    appUpdater.checkForUpdates()
+                if let updateActionHint = appUpdater.updateActionHint {
+                    Text(updateActionHint)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 340)
+                }
+
+                Button(appUpdater.infoButtonTitle) {
+                    appUpdater.performPrimaryUpdateAction()
                 }
                 .buttonStyle(.bordered)
                 .disabled(!appUpdater.canCheckForUpdates)

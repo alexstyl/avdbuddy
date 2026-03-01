@@ -12,8 +12,8 @@ struct AvdBuddyApp: App {
         .defaultSize(width: 980, height: 680)
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") {
-                    appUpdater.checkForUpdates()
+                Button(appUpdater.primaryUpdateActionTitle) {
+                    appUpdater.performPrimaryUpdateAction()
                 }
                 .disabled(!appUpdater.canCheckForUpdates)
             }
