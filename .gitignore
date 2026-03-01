@@ -12,3 +12,5 @@ specs/
 .env.enc
 .derivedData/
 output/
+skills/
+SOUL.md

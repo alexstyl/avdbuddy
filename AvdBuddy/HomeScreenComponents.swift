@@ -74,7 +74,6 @@ struct EmulatorCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(cardStroke, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(isHovered || isSelected ? 0.36 : 0.18), radius: isHovered || isSelected ? 18 : 10, y: 8)
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .animation(.easeOut(duration: 0.16), value: isHovered)
         .animation(.easeOut(duration: 0.16), value: isSelected)

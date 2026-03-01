@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_PATH="${ROOT_DIR}/AvdBuddy.xcodeproj"
+SCHEME="AvdBuddy"
+CONFIGURATION="Debug"
+DESTINATION="platform=macOS"
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "error: Missing command: $1" >&2
+    exit 1
+  fi
+}
+
+require_cmd xcodebuild
+require_cmd open
+
+BUILD_SETTINGS_FILE="$(mktemp)"
+trap 'rm -f "${BUILD_SETTINGS_FILE}"' EXIT
+
+xcodebuild \
+  -project "${PROJECT_PATH}" \
+  -scheme "${SCHEME}" \
+  -configuration "${CONFIGURATION}" \
+  -destination "${DESTINATION}" \
+  build >/dev/null
+
+xcodebuild \
+  -project "${PROJECT_PATH}" \
+  -scheme "${SCHEME}" \
+  -configuration "${CONFIGURATION}" \
+  -destination "${DESTINATION}" \
+  -showBuildSettings >"${BUILD_SETTINGS_FILE}"
+
+TARGET_BUILD_DIR="$(awk -F' = ' '/^[[:space:]]*TARGET_BUILD_DIR = / { print $2; exit }' "${BUILD_SETTINGS_FILE}")"
+FULL_PRODUCT_NAME="$(awk -F' = ' '/^[[:space:]]*FULL_PRODUCT_NAME = / { print $2; exit }' "${BUILD_SETTINGS_FILE}")"
+
+if [[ -z "${TARGET_BUILD_DIR}" || -z "${FULL_PRODUCT_NAME}" ]]; then
+  echo "error: Failed to resolve built app path" >&2
+  exit 1
+fi
+
+APP_PATH="${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}"
+
+if [[ ! -d "${APP_PATH}" ]]; then
+  echo "error: Built app not found at ${APP_PATH}" >&2
+  exit 1
+fi
+
+open -a "${APP_PATH}" --args "$@"
