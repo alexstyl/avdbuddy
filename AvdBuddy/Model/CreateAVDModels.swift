@@ -2,6 +2,7 @@ import Foundation
 
 enum CreateAVDDeviceType: String, CaseIterable, Identifiable {
     case phone = "Phone"
+    case foldable = "Foldable"
     case tablet = "Tablet"
     case wearOS = "Wear OS"
     case desktop = "Desktop"
@@ -14,6 +15,7 @@ enum CreateAVDDeviceType: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .phone: "iphone"
+        case .foldable: "rectangle.split.2x1"
         case .tablet: "ipad.landscape"
         case .wearOS: "applewatch"
         case .desktop: "desktopcomputer"
@@ -39,7 +41,10 @@ enum CreateAVDDeviceType: String, CaseIterable, Identifiable {
                 .init(id: "pixel_9", name: "Pixel 9"),
                 .init(id: "pixel_9a", name: "Pixel 9a"),
                 .init(id: "pixel_9_pro", name: "Pixel 9 Pro"),
-                .init(id: "pixel_9_pro_xl", name: "Pixel 9 Pro XL"),
+                .init(id: "pixel_9_pro_xl", name: "Pixel 9 Pro XL")
+            ]
+        case .foldable:
+            return [
                 .init(id: "pixel_9_pro_fold", name: "Pixel 9 Pro Fold"),
                 .init(id: "pixel_fold", name: "Pixel Fold")
             ]
@@ -228,7 +233,7 @@ struct AndroidSystemImage: Identifiable, Equatable {
         case .xr:
             return [.xr]
         default:
-            return [.phone, .tablet]
+            return [.phone, .foldable, .tablet]
         }
     }
 

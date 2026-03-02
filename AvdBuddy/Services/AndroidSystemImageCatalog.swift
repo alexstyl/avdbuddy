@@ -138,7 +138,7 @@ struct AndroidSystemImageCatalog {
             return [.googleAPIs, .googlePlay].filter { options.contains($0) }
         case .xr:
             return [.googlePlay].filter { options.contains($0) }
-        case .phone, .tablet:
+        case .phone, .foldable, .tablet:
             return [.none, .googleAPIs, .googlePlay].filter { options.contains($0) }
         }
     }

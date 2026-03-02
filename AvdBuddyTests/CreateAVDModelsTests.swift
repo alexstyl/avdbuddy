@@ -19,12 +19,31 @@ struct CreateAVDModelsTests {
     func exposesExpectedWizardFormFactors() {
         #expect(CreateAVDDeviceType.allCases.map(\.rawValue) == [
             "Phone",
+            "Foldable",
             "Tablet",
             "Wear OS",
             "Desktop",
             "TV",
             "Automotive",
             "XR"
+        ])
+    }
+
+    @Test
+    func exposesExpectedPhoneProfiles() {
+        #expect(CreateAVDDeviceType.phone.profileOptions.map(\.id) == [
+            "pixel_9",
+            "pixel_9a",
+            "pixel_9_pro",
+            "pixel_9_pro_xl"
+        ])
+    }
+
+    @Test
+    func exposesExpectedFoldableProfiles() {
+        #expect(CreateAVDDeviceType.foldable.profileOptions.map(\.id) == [
+            "pixel_9_pro_fold",
+            "pixel_fold"
         ])
     }
 

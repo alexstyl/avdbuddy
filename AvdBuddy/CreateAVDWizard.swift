@@ -490,6 +490,7 @@ struct CreateAVDWizardView: View {
     private func deviceDescription(for deviceType: CreateAVDDeviceType) -> String {
         switch deviceType {
         case .phone: "Standard handheld Android emulator."
+        case .foldable: "Foldable Android devices with inner and outer displays."
         case .tablet: "Large-screen Android tablet experience."
         case .wearOS: "Watch-sized Wear OS emulator."
         case .desktop: "Desktop-mode Android with freeform windows."
