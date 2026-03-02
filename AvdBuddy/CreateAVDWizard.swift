@@ -631,7 +631,7 @@ final class CreateAVDWizardModel: ObservableObject {
     }
 
     var currentProfileSupportsDeviceFrame: Bool {
-        manager.hasUsableDeviceFrame(for: selection.deviceProfile.id)
+        profileSupportsDeviceFrame(selection.deviceProfile)
     }
 
     var deviceFrameBinding: Binding<Bool> {
@@ -642,7 +642,7 @@ final class CreateAVDWizardModel: ObservableObject {
     }
 
     var currentDeviceTypeSupportsAnyDeviceFrame: Bool {
-        selection.deviceType.profileOptions.contains { manager.hasUsableDeviceFrame(for: $0.id) }
+        selection.deviceType.profileOptions.contains(where: profileSupportsDeviceFrame)
     }
 
     var canGoBack: Bool {
@@ -751,7 +751,7 @@ final class CreateAVDWizardModel: ObservableObject {
 
     func updateShowDeviceFrame(_ isEnabled: Bool) {
         rememberedShowDeviceFramePreference = isEnabled
-        selection.showDeviceFrame = isEnabled
+        syncDeviceFrameAvailability()
     }
 
     func syncCustomizationDefaults() {
@@ -775,11 +775,21 @@ final class CreateAVDWizardModel: ObservableObject {
     }
 
     private func syncDeviceFrameAvailability() {
-        if !currentProfileSupportsDeviceFrame {
-            selection.showDeviceFrame = false
-        } else {
-            selection.showDeviceFrame = rememberedShowDeviceFramePreference
-        }
+        selection.showDeviceFrame = effectiveDeviceFramePreference(
+            isSupported: currentProfileSupportsDeviceFrame,
+            rememberedPreference: rememberedShowDeviceFramePreference
+        )
+    }
+
+    private func profileSupportsDeviceFrame(_ profile: AVDDeviceProfile) -> Bool {
+        manager.hasUsableDeviceFrame(for: profile.id)
+    }
+
+    private func effectiveDeviceFramePreference(
+        isSupported: Bool,
+        rememberedPreference: Bool
+    ) -> Bool {
+        isSupported ? rememberedPreference : false
     }
 
     func goBack() {

@@ -3,6 +3,82 @@ import Foundation
 
 @MainActor
 final class EmulatorManager: ObservableObject {
+    private struct DeviceFrameSelection {
+        let configName: String
+        let configPath: String
+
+        var launchConfiguration: (directoryPath: String, skinName: String) {
+            let skinDirectory = URL(fileURLWithPath: configPath)
+            return (directoryPath: skinDirectory.deletingLastPathComponent().path, skinName: configName)
+        }
+    }
+
+    private enum DeviceProfilePresentation {
+        private static let automotiveLandscapeProfiles: Set<String> = [
+            "automotive_1024p_landscape",
+            "automotive_1080p_landscape",
+            "automotive_1408p_landscape_with_google_apis",
+            "automotive_1408p_landscape_with_play"
+        ]
+
+        static func frameSelection(
+            for deviceName: String,
+            sdkRootPath: String,
+            fileManager: FileManager,
+            isEnabled: Bool
+        ) -> DeviceFrameSelection? {
+            guard isEnabled else { return nil }
+
+            let skinRoot = URL(fileURLWithPath: sdkRootPath)
+                .appendingPathComponent("skins")
+                .appendingPathComponent(mappedSkinDirectoryName(for: deviceName))
+            guard fileManager.fileExists(atPath: skinRoot.path) else { return nil }
+
+            if fileManager.fileExists(atPath: skinRoot.appendingPathComponent("layout").path) {
+                return DeviceFrameSelection(configName: mappedConfigSkinName(for: deviceName), configPath: skinRoot.path)
+            }
+
+            let defaultSkinPath = skinRoot.appendingPathComponent("default")
+            if fileManager.fileExists(atPath: defaultSkinPath.appendingPathComponent("layout").path) {
+                return DeviceFrameSelection(configName: "default", configPath: defaultSkinPath.path)
+            }
+
+            return nil
+        }
+
+        static func preferredInitialOrientation(
+            for deviceName: String,
+            showDeviceFrame: Bool
+        ) -> String? {
+            if deviceName.hasPrefix("tv_") {
+                return "landscape"
+            }
+
+            if showDeviceFrame &&
+                deviceName.hasPrefix("automotive_") &&
+                !deviceName.localizedCaseInsensitiveContains("portrait") {
+                return "landscape"
+            }
+
+            return nil
+        }
+
+        private static func mappedSkinDirectoryName(for deviceName: String) -> String {
+            switch deviceName {
+            case _ where automotiveLandscapeProfiles.contains(deviceName):
+                return "automotive_landscape"
+            case "automotive_ultrawide":
+                return "automotive_ultrawide_cutout"
+            default:
+                return deviceName
+            }
+        }
+
+        private static func mappedConfigSkinName(for deviceName: String) -> String {
+            mappedSkinDirectoryName(for: deviceName)
+        }
+    }
+
     @Published private(set) var emulators: [EmulatorInstance] = []
     @Published private(set) var runningEmulatorNames: Set<String> = []
     @Published private(set) var deletingEmulatorNames: Set<String> = []
@@ -104,11 +180,11 @@ final class EmulatorManager: ObservableObject {
 
     func hasUsableDeviceFrame(for deviceProfileID: String) -> Bool {
         guard toolchainStatus.isConfigured else { return false }
-        return Self.skinConfiguration(
-            forDeviceName: deviceProfileID,
+        return Self.DeviceProfilePresentation.frameSelection(
+            for: deviceProfileID,
             sdkRootPath: resolvedToolchain().sdkPath,
             fileManager: fileManager,
-            showDeviceFrame: true
+            isEnabled: true
         ) != nil
     }
 
@@ -745,15 +821,14 @@ final class EmulatorManager: ObservableObject {
 
         guard let deviceName = AVDConfigParser.deviceName(from: config), !deviceName.isEmpty else { return nil }
 
-        guard let skinConfiguration = Self.skinConfiguration(
-            forDeviceName: deviceName,
+        guard let skinConfiguration = Self.DeviceProfilePresentation.frameSelection(
+            for: deviceName,
             sdkRootPath: sdkRootPath,
             fileManager: fileManager,
-            showDeviceFrame: true
+            isEnabled: true
         ) else { return nil }
 
-        let skinDirectory = URL(fileURLWithPath: skinConfiguration.path)
-        return (directoryPath: skinDirectory.deletingLastPathComponent().path, skinName: skinConfiguration.name)
+        return skinConfiguration.launchConfiguration
     }
 
     private func avdDiskUsageBytes(forAvdNamed avdName: String) -> Int64 {
@@ -881,14 +956,14 @@ final class EmulatorManager: ObservableObject {
             with: "showDeviceFrame=\(configuration.showDeviceFrame ? "yes" : "no")",
             in: &lines
         )
-        if let skinConfiguration = skinConfiguration(
-            forDeviceName: configuration.deviceProfileID,
+        if let skinConfiguration = DeviceProfilePresentation.frameSelection(
+            for: configuration.deviceProfileID,
             sdkRootPath: sdkRootPath,
             fileManager: fileManager,
-            showDeviceFrame: configuration.showDeviceFrame
+            isEnabled: configuration.showDeviceFrame
         ) {
-            replaceOrAppendLine(prefix: "skin.name=", with: "skin.name=\(skinConfiguration.name)", in: &lines)
-            replaceOrAppendLine(prefix: "skin.path=", with: "skin.path=\(skinConfiguration.path)", in: &lines)
+            replaceOrAppendLine(prefix: "skin.name=", with: "skin.name=\(skinConfiguration.configName)", in: &lines)
+            replaceOrAppendLine(prefix: "skin.path=", with: "skin.path=\(skinConfiguration.configPath)", in: &lines)
             replaceOrAppendLine(prefix: "skin.dynamic=", with: "skin.dynamic=yes", in: &lines)
         } else {
             removeLines(prefix: "skin.name=", in: &lines)
@@ -898,8 +973,8 @@ final class EmulatorManager: ObservableObject {
         if let ramMB = configuration.ramMB {
             replaceOrAppendLine(prefix: "hw.ramSize=", with: "hw.ramSize=\(ramMB)", in: &lines)
         }
-        if let initialOrientation = preferredInitialOrientation(
-            forDeviceName: configuration.deviceProfileID,
+        if let initialOrientation = DeviceProfilePresentation.preferredInitialOrientation(
+            for: configuration.deviceProfileID,
             showDeviceFrame: configuration.showDeviceFrame
         ) {
             replaceOrAppendLine(prefix: "hw.initialOrientation=", with: "hw.initialOrientation=\(initialOrientation)", in: &lines)
@@ -936,65 +1011,6 @@ final class EmulatorManager: ObservableObject {
 
     private nonisolated static func removeLines(prefix: String, in lines: inout [String]) {
         lines.removeAll { $0.hasPrefix(prefix) }
-    }
-
-    private nonisolated static func skinConfiguration(
-        forDeviceName deviceName: String,
-        sdkRootPath: String,
-        fileManager: FileManager,
-        showDeviceFrame: Bool
-    ) -> (name: String, path: String)? {
-        guard showDeviceFrame else { return nil }
-
-        let resolvedSkinName = resolvedSkinName(forDeviceName: deviceName)
-        let skinRoot = URL(fileURLWithPath: sdkRootPath)
-            .appendingPathComponent("skins")
-            .appendingPathComponent(resolvedSkinName)
-        guard fileManager.fileExists(atPath: skinRoot.path) else { return nil }
-
-        let topLevelLayout = skinRoot.appendingPathComponent("layout")
-        if fileManager.fileExists(atPath: topLevelLayout.path) {
-            return (name: resolvedSkinName, path: skinRoot.path)
-        }
-
-        let defaultSkinPath = skinRoot.appendingPathComponent("default")
-        let defaultLayout = defaultSkinPath.appendingPathComponent("layout")
-        if fileManager.fileExists(atPath: defaultLayout.path) {
-            return (name: "default", path: defaultSkinPath.path)
-        }
-
-        return nil
-    }
-
-    private nonisolated static func resolvedSkinName(forDeviceName deviceName: String) -> String {
-        switch deviceName {
-        case "automotive_1024p_landscape",
-             "automotive_1080p_landscape",
-             "automotive_1408p_landscape_with_google_apis",
-             "automotive_1408p_landscape_with_play":
-            return "automotive_landscape"
-        case "automotive_ultrawide":
-            return "automotive_ultrawide_cutout"
-        default:
-            return deviceName
-        }
-    }
-
-    private nonisolated static func preferredInitialOrientation(
-        forDeviceName deviceName: String,
-        showDeviceFrame: Bool
-    ) -> String? {
-        if deviceName.hasPrefix("tv_") {
-            return "landscape"
-        }
-
-        if showDeviceFrame &&
-            deviceName.hasPrefix("automotive_") &&
-            !deviceName.localizedCaseInsensitiveContains("portrait") {
-            return "landscape"
-        }
-
-        return nil
     }
 
     private func replaceOrAppendLine(prefix: String, with replacement: String, in lines: inout [String]) {
