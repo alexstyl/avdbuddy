@@ -35,6 +35,8 @@ struct ContentView: View {
         .background(
             KeyboardShortcutMonitorView {
                 selectAllEmulators()
+            } onCommandDelete: {
+                requestDeletionForSelection()
             } onBackgroundClick: {
                 selectedEmulatorIDs.removeAll()
             }
@@ -304,12 +306,29 @@ struct ContentView: View {
 
     private func pendingDeletionTargets(for emulator: EmulatorInstance) -> [EmulatorInstance] {
         if selectedEmulatorIDs.contains(emulator.id) {
-            let selected = manager.emulators.filter { selectedEmulatorIDs.contains($0.id) }
+            let selected = selectedEmulators()
             if !selected.isEmpty {
                 return selected
             }
         }
         return [emulator]
+    }
+
+    private func requestDeletionForSelection() {
+        let selected = selectedEmulators()
+        guard canRequestDeletion(for: selected) else { return }
+        emulatorsPendingDeletion = selected
+    }
+
+    private func selectedEmulators() -> [EmulatorInstance] {
+        manager.emulators.filter { selectedEmulatorIDs.contains($0.id) }
+    }
+
+    private func canRequestDeletion(for emulators: [EmulatorInstance]) -> Bool {
+        !emulators.isEmpty &&
+        manager.isToolchainConfigured &&
+        !manager.isBusy &&
+        emulators.allSatisfy { !manager.isDeleting($0) }
     }
 
     private func menuActions(for emulator: EmulatorInstance) -> [CardMenuAction] {
@@ -320,7 +339,7 @@ struct ContentView: View {
                     title: "Move to Trash",
                     systemImage: nil,
                     isDestructive: true,
-                    isEnabled: manager.isToolchainConfigured && !manager.isBusy && deletionTargets.allSatisfy { !manager.isDeleting($0) },
+                    isEnabled: canRequestDeletion(for: deletionTargets),
                     handler: {
                         emulatorsPendingDeletion = deletionTargets
                     }
@@ -381,7 +400,7 @@ struct ContentView: View {
                 title: "Move to Trash",
                 systemImage: nil,
                 isDestructive: true,
-                isEnabled: manager.isToolchainConfigured && !manager.isBusy && deletionTargets.allSatisfy { !manager.isDeleting($0) },
+                isEnabled: canRequestDeletion(for: deletionTargets),
                 handler: {
                     emulatorsPendingDeletion = deletionTargets
                 }

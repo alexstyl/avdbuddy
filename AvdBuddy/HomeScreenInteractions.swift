@@ -3,17 +3,20 @@ import SwiftUI
 
 struct KeyboardShortcutMonitorView: NSViewRepresentable {
     let onCommandA: () -> Void
+    let onCommandDelete: () -> Void
     let onBackgroundClick: () -> Void
 
     func makeNSView(context: Context) -> KeyboardShortcutMonitorNSView {
         let view = KeyboardShortcutMonitorNSView()
         view.onCommandA = onCommandA
+        view.onCommandDelete = onCommandDelete
         view.onBackgroundClick = onBackgroundClick
         return view
     }
 
     func updateNSView(_ nsView: KeyboardShortcutMonitorNSView, context: Context) {
         nsView.onCommandA = onCommandA
+        nsView.onCommandDelete = onCommandDelete
         nsView.onBackgroundClick = onBackgroundClick
     }
 }
@@ -65,6 +68,7 @@ final class BackgroundInteractionNSView: NSView {
 
 final class KeyboardShortcutMonitorNSView: NSView {
     var onCommandA: (() -> Void)?
+    var onCommandDelete: (() -> Void)?
     var onBackgroundClick: (() -> Void)?
     private var localMonitor: Any?
 
@@ -83,14 +87,22 @@ final class KeyboardShortcutMonitorNSView: NSView {
             guard let self, let window = self.window, event.window == window else { return event }
 
             if event.type == .keyDown {
-                guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) else { return event }
-                guard event.charactersIgnoringModifiers?.lowercased() == "a" else { return event }
-
-                if let textView = window.firstResponder as? NSTextView, textView.isEditable {
+                let isEditingText = (window.firstResponder as? NSTextView)?.isEditable == true
+                guard let action = HomeScreenKeyboardShortcut.action(
+                    forKeyCode: event.keyCode,
+                    charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+                    modifiers: event.modifierFlags,
+                    isEditingText: isEditingText
+                ) else {
                     return event
                 }
 
-                self.onCommandA?()
+                switch action {
+                case .selectAll:
+                    self.onCommandA?()
+                case .moveToTrash:
+                    self.onCommandDelete?()
+                }
                 return nil
             }
 
@@ -109,6 +121,33 @@ final class KeyboardShortcutMonitorNSView: NSView {
             NSEvent.removeMonitor(localMonitor)
             self.localMonitor = nil
         }
+    }
+}
+
+enum HomeScreenKeyboardShortcut {
+    case selectAll
+    case moveToTrash
+
+    static func action(
+        forKeyCode keyCode: UInt16,
+        charactersIgnoringModifiers: String?,
+        modifiers: NSEvent.ModifierFlags,
+        isEditingText: Bool
+    ) -> Self? {
+        let flags = modifiers.intersection(.deviceIndependentFlagsMask)
+        guard flags.contains(.command), !isEditingText else {
+            return nil
+        }
+
+        if charactersIgnoringModifiers?.lowercased() == "a" {
+            return .selectAll
+        }
+
+        if keyCode == 51 {
+            return .moveToTrash
+        }
+
+        return nil
     }
 }
 
