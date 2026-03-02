@@ -76,14 +76,6 @@ struct CreateAVDWizardView: View {
 
     private var footer: some View {
         HStack {
-            if let footerMessage = model.footerMessage {
-                Text(footerMessage)
-                    .font(.callout)
-                    .foregroundStyle(model.hasFooterError ? Color.red : .secondary)
-            }
-
-            Spacer()
-
             if model.step == .creating {
                 Button(model.isCancellingCreation ? "Cancelling…" : "Cancel") {
                     model.cancelCreation()
@@ -93,6 +85,23 @@ struct CreateAVDWizardView: View {
                 Button("Cancel") {
                     dismiss()
                 }
+            }
+
+            Spacer()
+
+            if let footerMessage = model.footerMessage {
+                Text(footerMessage)
+                    .font(.callout)
+                    .foregroundStyle(model.hasFooterError ? Color.red : .secondary)
+            }
+
+            Spacer()
+
+            if model.step != .creating {
+                Button("Previous") {
+                    model.goBack()
+                }
+                .disabled(!model.canGoBack)
 
                 Button(model.primaryActionTitle) {
                     Task { await model.advance() }
