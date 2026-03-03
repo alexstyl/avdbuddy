@@ -1,8 +1,12 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct InfoSheet: View {
     @EnvironmentObject private var appUpdater: AppUpdater
+    @State private var isExportingDiagnostics = false
+    @State private var diagnosticsDocument: DiagnosticsTextDocument?
+    @State private var isPresentingDiagnosticsExporter = false
 
     var body: some View {
         ZStack {
@@ -50,11 +54,37 @@ struct InfoSheet: View {
                 .buttonStyle(.bordered)
                 .disabled(!appUpdater.canCheckForUpdates)
                 .padding(.top, 8)
+
+                Button("Export Diagnostics") {
+                    Task {
+                        await exportDiagnostics()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isExportingDiagnostics)
+
+                if isExportingDiagnostics {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Preparing diagnostics…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 560, height: 460)
+        .fileExporter(
+            isPresented: $isPresentingDiagnosticsExporter,
+            document: diagnosticsDocument,
+            contentType: .plainText,
+            defaultFilename: diagnosticsDocument?.suggestedFilename
+        ) { _ in
+            diagnosticsDocument = nil
+        }
     }
 
     private var bundleName: String {
@@ -65,6 +95,47 @@ struct InfoSheet: View {
         let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
         return "Version \(shortVersion) (\(build))"
+    }
+
+    private func exportDiagnostics() async {
+        guard !isExportingDiagnostics else { return }
+        isExportingDiagnostics = true
+        let installationSource = appUpdater.installationSource
+
+        let document = await Task.detached(priority: .userInitiated) {
+            let report = AppDiagnostics.report(installationSource: installationSource)
+            return DiagnosticsTextDocument(text: report)
+        }.value
+
+        diagnosticsDocument = document
+        isExportingDiagnostics = false
+        isPresentingDiagnosticsExporter = true
+    }
+}
+
+private struct DiagnosticsTextDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.plainText] }
+
+    let text: String
+    let suggestedFilename = "AvdBuddy-Diagnostics.txt"
+
+    init(text: String) {
+        self.text = text
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents,
+              let text = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.text = text
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        guard let data = text.data(using: .utf8) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 
