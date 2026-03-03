@@ -1,6 +1,6 @@
 cask "avdbuddy" do
-  version "0.3.0"
-  sha256 "REPLACE_WITH_SHA256_OF_AvdBuddy-0.3.0.dmg"
+  version "0.4.1"
+  sha256 "b1b2237a02951ebb03f2a20adce807ace29d8db737b7c7194e753ebf06dda241"
 
   url "https://github.com/alexstyl/avdbuddy/releases/download/#{version}/AvdBuddy-#{version}.dmg"
   name "AvdBuddy"
