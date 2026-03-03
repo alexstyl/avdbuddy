@@ -7,6 +7,9 @@ struct InfoSheet: View {
     @State private var isExportingDiagnostics = false
     @State private var diagnosticsDocument: DiagnosticsTextDocument?
     @State private var isPresentingDiagnosticsExporter = false
+    @State private var isPresentingFeedbackCopiedAlert = false
+
+    private let feedbackEmailAddress = "avdbuddy@alexstyl.com"
 
     var body: some View {
         ZStack {
@@ -29,6 +32,16 @@ struct InfoSheet: View {
                     .padding(.bottom, 20)
 
                 VStack(spacing: 18) {
+                    Button {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(feedbackEmailAddress, forType: .string)
+                        isPresentingFeedbackCopiedAlert = true
+                    } label: {
+                        InfoLinkLabel(systemName: "envelope", title: "Send feedback")
+                    }
+                    .buttonStyle(.plain)
+
                     Link(destination: URL(string: "https://github.com/alexstyl/avdbuddy")!) {
                         InfoLinkLabel(systemName: "chevron.left.forwardslash.chevron.right", title: "Star on GitHub")
                     }
@@ -77,6 +90,9 @@ struct InfoSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 560, height: 460)
+        .alert("Email copied to clipboard", isPresented: $isPresentingFeedbackCopiedAlert) {
+            Button("OK", role: .cancel) {}
+        }
         .fileExporter(
             isPresented: $isPresentingDiagnosticsExporter,
             document: diagnosticsDocument,
