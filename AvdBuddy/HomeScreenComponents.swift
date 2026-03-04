@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct InfoSheet: View {
     @EnvironmentObject private var appUpdater: AppUpdater
+    @Environment(\.dismiss) private var dismiss
     @State private var isExportingDiagnostics = false
     @State private var diagnosticsDocument: DiagnosticsTextDocument?
     @State private var isPresentingDiagnosticsExporter = false
@@ -75,6 +76,13 @@ struct InfoSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isExportingDiagnostics)
+                .padding(.top, 4)
+
+                Button("Close") {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 8)
 
                 if isExportingDiagnostics {
                     HStack(spacing: 8) {
@@ -87,9 +95,10 @@ struct InfoSheet: View {
                 }
             }
             .padding(24)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 560)
         .alert("Email copied to clipboard", isPresented: $isPresentingFeedbackCopiedAlert) {
             Button("OK", role: .cancel) {}
         }
