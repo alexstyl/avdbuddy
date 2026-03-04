@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-04
+
 ### Added
 - AvdBuddy now prefetches the Android image catalog from Google on startup and when you switch to a valid SDK, so the Create AVD flow is faster.
 
