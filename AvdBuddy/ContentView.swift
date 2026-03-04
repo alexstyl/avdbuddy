@@ -17,20 +17,12 @@ struct ContentView: View {
     private let minimumCardWidth: CGFloat = 250
 
     var body: some View {
-        ZStack {
-            backgroundView
-
-            VStack(alignment: .leading, spacing: 0) {
-                content
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-            topBanners
-                .padding(.horizontal, horizontalPadding)
-                .padding(.top, 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        VStack(alignment: .leading, spacing: 0) {
+            content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(minWidth: 980, minHeight: 680)
+        .background(backgroundView)
         .background(WindowConfigurationView())
         .background(
             KeyboardShortcutMonitorView {
@@ -162,23 +154,6 @@ struct ContentView: View {
         }
         .disabled(!manager.isToolchainConfigured)
         .help("Create AVD")
-    }
-
-    @ViewBuilder
-    private var topBanners: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !manager.isToolchainConfigured {
-                StatusBanner(
-                    title: "Android SDK setup required",
-                    message: manager.toolchainStatus.summary,
-                    tint: .orange,
-                    actionTitle: "Configure",
-                    action: {
-                        isPresentingSDKSetup = true
-                    }
-                )
-            }
-        }
     }
 
     @ViewBuilder
