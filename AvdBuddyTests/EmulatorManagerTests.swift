@@ -34,6 +34,62 @@ struct EmulatorManagerTests {
     }
 
     @Test @MainActor
+    func warmsSystemImageCatalogOnceAndReusesIt() async throws {
+        let sdkRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: sdkRoot) }
+        try createSDKToolchainFixture(at: sdkRoot)
+
+        let runner = MockRunner()
+        runner.handler = { command in
+            if command.arguments == ["--list"] {
+                return CommandResult(exitCode: 0, stdout: sdkManagerListFixture, stderr: "")
+            }
+            return CommandResult(exitCode: 0, stdout: "", stderr: "")
+        }
+
+        let manager = EmulatorManager(runner: runner, fileManager: FileManager(), sdkPath: sdkRoot.path)
+        manager.warmSystemImageCatalogIfNeeded()
+
+        try await eventually {
+            runner.commands.filter { $0.arguments == ["--list"] }.count == 1
+        }
+
+        _ = try await manager.loadSystemImages()
+        _ = try await manager.loadSystemImagesWithDebugOutput()
+
+        #expect(runner.commands.filter { $0.arguments == ["--list"] }.count == 1)
+    }
+
+    @Test @MainActor
+    func updatingSDKPathToValidSDKWarmsSystemImageCatalog() async throws {
+        let invalidSDKRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: invalidSDKRoot) }
+
+        let validSDKRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: validSDKRoot) }
+        try createSDKToolchainFixture(at: validSDKRoot)
+
+        let runner = MockRunner()
+        runner.handler = { command in
+            if command.arguments == ["--list"] {
+                return CommandResult(exitCode: 0, stdout: sdkManagerListFixture, stderr: "")
+            }
+            return CommandResult(exitCode: 0, stdout: "", stderr: "")
+        }
+
+        let manager = EmulatorManager(runner: runner, fileManager: FileManager(), sdkPath: invalidSDKRoot.path)
+
+        manager.updateSDKPath(validSDKRoot.path)
+
+        try await eventually {
+            runner.commands.contains {
+                $0.executable == "\(validSDKRoot.path)/cmdline-tools/latest/bin/sdkmanager" &&
+                $0.arguments == ["--list"]
+            }
+        }
+    }
+
+    @Test @MainActor
     func createsResolvedAVDUsingSelectedSystemImageAndWritesConfig() async throws {
         let tempDirectory = try temporaryAVDRoot()
         defer { try? FileManager().removeItem(at: tempDirectory.deletingLastPathComponent()) }
@@ -1025,6 +1081,21 @@ private func createAVDFixture(
     \(colorSeed.map { "avdbuddy.color.seed=\($0)" } ?? "")
     """
     try configContents.write(to: directoryURL.appendingPathComponent("config.ini"), atomically: true, encoding: .utf8)
+}
+
+private func eventually(
+    timeoutNanoseconds: UInt64 = 2_000_000_000,
+    intervalNanoseconds: UInt64 = 20_000_000,
+    condition: @escaping @Sendable () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + .nanoseconds(Int64(timeoutNanoseconds))
+    while !condition() {
+        if ContinuousClock.now >= deadline {
+            Issue.record("Condition was not met before timeout.")
+            throw CancellationError()
+        }
+        try await Task.sleep(nanoseconds: intervalNanoseconds)
+    }
 }
 
 final class MockRunner: CommandRunning, @unchecked Sendable {

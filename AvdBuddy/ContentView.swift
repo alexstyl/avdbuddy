@@ -81,6 +81,8 @@ struct ContentView: View {
             manager.refreshRunningStates()
             if !manager.isToolchainConfigured {
                 isPresentingSDKSetup = true
+            } else {
+                manager.warmSystemImageCatalogIfNeeded()
             }
         }
         .task {
