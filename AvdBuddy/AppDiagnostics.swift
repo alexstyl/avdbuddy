@@ -335,7 +335,15 @@ enum AppDiagnostics {
         guard let toolState = status.toolStates.first(where: { $0.tool == tool }) else {
             return "Unavailable"
         }
-        let availability = toolState.isAvailable ? "available" : "missing"
+        let availability: String
+        switch toolState.validationStatus {
+        case .available:
+            availability = "available"
+        case .missing:
+            availability = "missing"
+        case .unsupported:
+            availability = "unsupported"
+        }
         return "\(redactor.redact(toolState.path)) (\(availability))"
     }
 

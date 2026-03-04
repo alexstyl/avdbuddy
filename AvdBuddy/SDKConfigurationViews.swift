@@ -58,6 +58,8 @@ struct StatusBanner: View {
 }
 
 struct AndroidSDKSetupSheet: View {
+    private let commandLineToolsInstructionsURL = URL(string: "https://developer.android.com/tools")!
+
     @ObservedObject var manager: EmulatorManager
     @Environment(\.dismiss) private var dismiss
     @State private var sdkPath: String
@@ -71,6 +73,9 @@ struct AndroidSDKSetupSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             header
             pathEditor
+            if validationStatus.unsupportedTools.contains(where: { [.sdkManager, .avdManager].contains($0.tool) }) {
+                deprecatedToolsWarning
+            }
             validationList
             footer
         }
@@ -110,12 +115,35 @@ struct AndroidSDKSetupSheet: View {
                         sdkPath = selectedPath
                     }
                 }
+
+                Button {
+                    refreshValidation()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .help("Refresh SDK validation")
             }
 
-            Text(pathStatusMessage)
-                .font(.system(size: 12))
-                .foregroundStyle(validationStatus.isConfigured ? Color.green : Color.secondary)
+            if let pathStatusMessage {
+                Text(pathStatusMessage)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private var deprecatedToolsWarning: some View {
+        StatusBanner(
+            title: "Android Command-line Tools required",
+            message: "The specified SDK uses legacy tools from tools/bin. AvdBuddy only supports modern Android Command-line Tools from cmdline-tools.",
+            tint: .orange,
+            actionTitle: "Instructions",
+            action: openCommandLineToolsInstructions
+        )
     }
 
     private var validationList: some View {
@@ -137,6 +165,11 @@ struct AndroidSDKSetupSheet: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
+                        if let issueDescription = state.issueDescription {
+                            Text(issueDescription)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red)
+                        }
                     }
                 }
             }
@@ -150,12 +183,6 @@ struct AndroidSDKSetupSheet: View {
 
     private var footer: some View {
         HStack {
-            if !validationStatus.isConfigured {
-                Text(validationStatus.summary)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-
             Spacer()
 
             Button("Cancel") {
@@ -185,9 +212,12 @@ struct AndroidSDKSetupSheet: View {
         manager.autodetectedSDKPath
     }
 
-    private var pathStatusMessage: String {
+    private var pathStatusMessage: String? {
         if validationStatus.isConfigured {
-            return "All required tools were found in this SDK."
+            return nil
+        }
+        if !validationStatus.unsupportedTools.isEmpty {
+            return "Install Android Command-line Tools so sdkmanager and avdmanager are available under cmdline-tools/latest/bin."
         }
         return "Choose the Android SDK folder that contains cmdline-tools, emulator, and platform-tools."
     }
@@ -203,5 +233,13 @@ struct AndroidSDKSetupSheet: View {
             panel.directoryURL = URL(fileURLWithPath: sdkPath)
         }
         return panel.runModal() == .OK ? panel.url?.path : nil
+    }
+
+    private func refreshValidation() {
+        manager.updateSDKPath(sdkPath)
+    }
+
+    private func openCommandLineToolsInstructions() {
+        NSWorkspace.shared.open(commandLineToolsInstructionsURL)
     }
 }

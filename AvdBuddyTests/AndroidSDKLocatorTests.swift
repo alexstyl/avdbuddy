@@ -22,6 +22,23 @@ struct AndroidSDKLocatorTests {
     }
 
     @Test
+    func rejectsLegacyToolsBinForSdkManagerAndAvdManager() throws {
+        let sdkRoot = FileManager().temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager().removeItem(at: sdkRoot) }
+
+        try createExecutable(at: sdkRoot.appendingPathComponent("tools/bin/sdkmanager"))
+        try createExecutable(at: sdkRoot.appendingPathComponent("tools/bin/avdmanager"))
+        try createExecutable(at: sdkRoot.appendingPathComponent("emulator/emulator"))
+        try createExecutable(at: sdkRoot.appendingPathComponent("platform-tools/adb"))
+
+        let status = AndroidSDKLocator.toolchainStatus(for: sdkRoot.path, isStoredOverride: false)
+
+        #expect(!status.isConfigured)
+        #expect(status.unsupportedTools.map(\.tool) == [.sdkManager, .avdManager])
+        #expect(status.summary.contains("Deprecated sdkmanager, avdmanager found under tools/bin."))
+    }
+
+    @Test
     func reportsMissingToolsForIncompleteSDK() throws {
         let sdkRoot = FileManager().temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager().removeItem(at: sdkRoot) }

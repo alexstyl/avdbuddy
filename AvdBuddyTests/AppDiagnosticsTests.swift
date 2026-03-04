@@ -13,10 +13,10 @@ struct AppDiagnosticsTests {
                 sdkPath: "\(home)/Library/Android/sdk",
                 isStoredOverride: false,
                 toolStates: [
-                    AndroidToolState(tool: .sdkManager, path: "\(home)/Library/Android/sdk/cmdline-tools/latest/bin/sdkmanager", isAvailable: true),
-                    AndroidToolState(tool: .avdManager, path: "\(home)/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager", isAvailable: true),
-                    AndroidToolState(tool: .emulator, path: "\(home)/Library/Android/sdk/emulator/emulator", isAvailable: false),
-                    AndroidToolState(tool: .adb, path: "\(home)/Library/Android/sdk/platform-tools/adb", isAvailable: true),
+                    AndroidToolState(tool: .sdkManager, path: "\(home)/Library/Android/sdk/cmdline-tools/latest/bin/sdkmanager", validationStatus: .available),
+                    AndroidToolState(tool: .avdManager, path: "\(home)/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager", validationStatus: .available),
+                    AndroidToolState(tool: .emulator, path: "\(home)/Library/Android/sdk/emulator/emulator", validationStatus: .missing),
+                    AndroidToolState(tool: .adb, path: "\(home)/Library/Android/sdk/platform-tools/adb", validationStatus: .available),
                 ]
             ),
             autodetectedSDKPath: "\(home)/Library/Android/sdk",
@@ -89,10 +89,10 @@ struct AppDiagnosticsTests {
                 sdkPath: "/sdk",
                 isStoredOverride: false,
                 toolStates: [
-                    AndroidToolState(tool: .sdkManager, path: "/sdk/sdkmanager", isAvailable: true),
-                    AndroidToolState(tool: .avdManager, path: "/sdk/avdmanager", isAvailable: true),
-                    AndroidToolState(tool: .emulator, path: "/sdk/emulator", isAvailable: true),
-                    AndroidToolState(tool: .adb, path: "/sdk/adb", isAvailable: true),
+                    AndroidToolState(tool: .sdkManager, path: "/sdk/sdkmanager", validationStatus: .available),
+                    AndroidToolState(tool: .avdManager, path: "/sdk/avdmanager", validationStatus: .available),
+                    AndroidToolState(tool: .emulator, path: "/sdk/emulator", validationStatus: .available),
+                    AndroidToolState(tool: .adb, path: "/sdk/adb", validationStatus: .available),
                 ]
             ),
             autodetectedSDKPath: "/sdk",

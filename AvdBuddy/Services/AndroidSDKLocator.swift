@@ -39,9 +39,37 @@ enum AndroidTool: String, CaseIterable, Identifiable, Sendable {
 }
 
 struct AndroidToolState: Identifiable, Equatable, Sendable {
+    enum ValidationStatus: Equatable, Sendable {
+        case available
+        case missing
+        case unsupported(String)
+    }
+
     let tool: AndroidTool
     let path: String
-    let isAvailable: Bool
+    let validationStatus: ValidationStatus
+
+    var isAvailable: Bool {
+        validationStatus == .available
+    }
+
+    var isUnsupported: Bool {
+        if case .unsupported = validationStatus {
+            return true
+        }
+        return false
+    }
+
+    var issueDescription: String? {
+        switch validationStatus {
+        case .available:
+            return nil
+        case .missing:
+            return "Not found in this SDK."
+        case .unsupported(let message):
+            return message
+        }
+    }
 
     var id: AndroidTool { tool }
 }
@@ -73,12 +101,24 @@ struct AndroidToolchainStatus: Equatable, Sendable {
     }
 
     var missingTools: [AndroidToolState] {
-        toolStates.filter { !$0.isAvailable }
+        toolStates.filter { $0.validationStatus == .missing }
+    }
+
+    var unsupportedTools: [AndroidToolState] {
+        toolStates.filter(\.isUnsupported)
     }
 
     var summary: String {
         guard !isConfigured else {
             return "Android SDK ready."
+        }
+        if !unsupportedTools.isEmpty {
+            let names = unsupportedTools.map { $0.tool.title }.joined(separator: ", ")
+            if missingTools.isEmpty {
+                return "Deprecated \(names) found under tools/bin. Install Android Command-line Tools."
+            }
+            let missingNames = missingTools.map { $0.tool.title }.joined(separator: ", ")
+            return "Deprecated \(names) found under tools/bin. Missing \(missingNames). Install Android Command-line Tools."
         }
         guard !missingTools.isEmpty else {
             return "Android SDK setup is incomplete."
@@ -188,7 +228,12 @@ enum AndroidSDKLocator {
             return AndroidToolState(
                 tool: tool,
                 path: path,
-                isAvailable: fileManager.isExecutableFile(atPath: path)
+                validationStatus: validationStatus(
+                    for: tool,
+                    path: path,
+                    sdkPath: sdkPath,
+                    fileManager: fileManager
+                )
             )
         }
         return AndroidToolchainStatus(
@@ -273,6 +318,29 @@ enum AndroidSDKLocator {
             return fallback
         }
         return primary
+    }
+
+    private static func validationStatus(
+        for tool: AndroidTool,
+        path: String,
+        sdkPath: String,
+        fileManager: FileManager
+    ) -> AndroidToolState.ValidationStatus {
+        guard fileManager.isExecutableFile(atPath: path) else {
+            return .missing
+        }
+
+        if [.sdkManager, .avdManager].contains(tool), isLegacyToolsBinary(path, sdkPath: sdkPath) {
+            return .unsupported("Invalid binary. AvdBuddy requires cmdline-tools.")
+        }
+
+        return .available
+    }
+
+    private static func isLegacyToolsBinary(_ path: String, sdkPath: String) -> Bool {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let normalizedSDKPath = URL(fileURLWithPath: sdkPath).standardizedFileURL.path
+        return normalizedPath.hasPrefix("\(normalizedSDKPath)/tools/bin/")
     }
 }
 
