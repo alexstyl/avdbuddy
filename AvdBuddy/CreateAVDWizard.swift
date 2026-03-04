@@ -567,21 +567,18 @@ final class CreateAVDWizardModel: ObservableObject {
 
     @Published var step: Step = .deviceType
     @Published var selection = CreateAVDSelection()
-    @Published private(set) var allImages: [AndroidSystemImage] = []
-    @Published var isLoadingCatalog = false
     @Published var footerMessage: String?
     @Published var hasFooterError = false
     @Published var progressTitle = "Preparing AVD"
     @Published var progressMessage = "Loading Android images and creating your emulator."
     @Published var didCreateSuccessfully = false
-    @Published var catalogLoadingMessage = "Fetching the Android image catalog from Google."
-    @Published var catalogCommandOutput = ""
     @Published var creationCommandOutput = ""
     @Published var isCancellingCreation = false
 
     private unowned let manager: EmulatorManager
     private var lastSuggestedName: String
     private var rememberedShowDeviceFramePreference = true
+    private var cancellables: Set<AnyCancellable> = []
 
     init(manager: EmulatorManager) {
         self.manager = manager
@@ -589,10 +586,31 @@ final class CreateAVDWizardModel: ObservableObject {
         selection.avdName = generateSuggestedName(for: selection.deviceType)
         lastSuggestedName = selection.avdName
         syncCustomizationDefaults()
+        manager.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     var releases: [AndroidRelease] {
         versionFamilies.flatMap(\.releases)
+    }
+
+    private var allImages: [AndroidSystemImage] {
+        manager.systemImageCatalogState.images
+    }
+
+    var isLoadingCatalog: Bool {
+        manager.systemImageCatalogState.isLoading
+    }
+
+    var catalogLoadingMessage: String {
+        "Fetching the Android image catalog from Google."
+    }
+
+    var catalogCommandOutput: String {
+        manager.systemImageCatalogState.output
     }
 
     var versionFamilies: [AndroidVersionFamily] {
@@ -692,16 +710,7 @@ final class CreateAVDWizardModel: ObservableObject {
     }
 
     func loadCatalogIfNeeded() async {
-        guard allImages.isEmpty else { return }
-        isLoadingCatalog = true
-        footerMessage = "Fetching the Android image catalog from Google. This can take a while."
-        hasFooterError = false
-        catalogLoadingMessage = "Fetching the Android image catalog from Google."
-        catalogCommandOutput = "$ \(manager.sdkManagerDebugCommand) --list\nWaiting for output..."
-        do {
-            let result = try await manager.loadSystemImagesWithDebugOutput()
-            allImages = result.images
-            catalogCommandOutput = result.output
+        guard allImages.isEmpty else {
             if selection.selectedVersionFamilyID == nil {
                 selection.selectedVersionFamilyID = versionFamilies.first?.id
             }
@@ -709,15 +718,24 @@ final class CreateAVDWizardModel: ObservableObject {
                 selection.selectedVersionIdentifier = selectedVersionFamily?.defaultReleaseIdentifier
             }
             syncCustomizationDefaults()
-            footerMessage = "Loaded \(allImages.count) Android image variants."
+            return
+        }
+        footerMessage = "Fetching the Android image catalog from Google. This can take a while."
+        hasFooterError = false
+        do {
+            let result = try await manager.loadSystemImagesWithDebugOutput()
+            if selection.selectedVersionFamilyID == nil {
+                selection.selectedVersionFamilyID = versionFamilies.first?.id
+            }
+            if selection.selectedVersionIdentifier == nil {
+                selection.selectedVersionIdentifier = selectedVersionFamily?.defaultReleaseIdentifier
+            }
+            syncCustomizationDefaults()
+            footerMessage = "Loaded \(result.images.count) Android image variants."
         } catch {
             footerMessage = "Could not load Android versions."
             hasFooterError = true
-            if catalogCommandOutput == "$ \(manager.sdkManagerDebugCommand) --list\nWaiting for output..." {
-                catalogCommandOutput = "$ \(manager.sdkManagerDebugCommand) --list\nNo output captured before failure."
-            }
         }
-        isLoadingCatalog = false
     }
 
     func selectDeviceType(_ deviceType: CreateAVDDeviceType) {

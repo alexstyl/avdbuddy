@@ -62,9 +62,9 @@ struct CreateAVDModelsTests {
 
     @Test @MainActor
     func defaultsDeviceFrameBackOnWhenSwitchingToSupportedFormFactor() throws {
-        let sdkRoot = try temporarySDKRootForModels()
+        let sdkRoot = try temporarySDKRoot()
         defer { try? FileManager().removeItem(at: sdkRoot) }
-        try createSDKToolchainFixtureForModels(at: sdkRoot)
+        try createSDKToolchainFixture(at: sdkRoot)
         try FileManager().createDirectory(
             at: sdkRoot.appendingPathComponent("skins/pixel_9"),
             withIntermediateDirectories: true
@@ -91,9 +91,9 @@ struct CreateAVDModelsTests {
 
     @Test @MainActor
     func defaultsDeviceFrameBackOnWhenSwitchingToSupportedProfile() throws {
-        let sdkRoot = try temporarySDKRootForModels()
+        let sdkRoot = try temporarySDKRoot()
         defer { try? FileManager().removeItem(at: sdkRoot) }
-        try createSDKToolchainFixtureForModels(at: sdkRoot)
+        try createSDKToolchainFixture(at: sdkRoot)
         try FileManager().createDirectory(
             at: sdkRoot.appendingPathComponent("skins/automotive_large_portrait"),
             withIntermediateDirectories: true
@@ -120,9 +120,9 @@ struct CreateAVDModelsTests {
 
     @Test @MainActor
     func preservesDisabledDeviceFramePreferenceWhenSwitchingThroughUnsupportedFormFactor() throws {
-        let sdkRoot = try temporarySDKRootForModels()
+        let sdkRoot = try temporarySDKRoot()
         defer { try? FileManager().removeItem(at: sdkRoot) }
-        try createSDKToolchainFixtureForModels(at: sdkRoot)
+        try createSDKToolchainFixture(at: sdkRoot)
         try FileManager().createDirectory(
             at: sdkRoot.appendingPathComponent("skins/pixel_9"),
             withIntermediateDirectories: true
@@ -150,9 +150,9 @@ struct CreateAVDModelsTests {
 
     @Test @MainActor
     func preservesDisabledDeviceFramePreferenceWhenSwitchingThroughUnsupportedProfile() throws {
-        let sdkRoot = try temporarySDKRootForModels()
+        let sdkRoot = try temporarySDKRoot()
         defer { try? FileManager().removeItem(at: sdkRoot) }
-        try createSDKToolchainFixtureForModels(at: sdkRoot)
+        try createSDKToolchainFixture(at: sdkRoot)
         try FileManager().createDirectory(
             at: sdkRoot.appendingPathComponent("skins/automotive_large_portrait"),
             withIntermediateDirectories: true
@@ -179,29 +179,5 @@ struct CreateAVDModelsTests {
 
         model.updateDeviceProfile(.init(id: "automotive_large_portrait", name: "Large Portrait"))
         #expect(!model.selection.showDeviceFrame)
-    }
-}
-
-private func temporarySDKRootForModels() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    return root
-}
-
-private func createSDKToolchainFixtureForModels(at sdkRoot: URL) throws {
-    let fileManager = FileManager()
-    let relativePaths = [
-        "cmdline-tools/latest/bin/sdkmanager",
-        "cmdline-tools/latest/bin/avdmanager",
-        "emulator/emulator",
-        "platform-tools/adb"
-    ]
-
-    for relativePath in relativePaths {
-        let fileURL = sdkRoot.appendingPathComponent(relativePath)
-        try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "#!/bin/sh\n".write(to: fileURL, atomically: true, encoding: .utf8)
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fileURL.path)
     }
 }

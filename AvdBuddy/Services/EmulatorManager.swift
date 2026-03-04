@@ -3,12 +3,6 @@ import Foundation
 
 @MainActor
 final class EmulatorManager: ObservableObject {
-    private struct SystemImageCatalogSnapshot {
-        let sdkPath: String
-        let images: [AndroidSystemImage]
-        let output: String
-    }
-
     private struct DeviceFrameSelection {
         let configName: String
         let configPath: String
@@ -94,27 +88,29 @@ final class EmulatorManager: ObservableObject {
     @Published private(set) var lastCreatedEmulatorName: String?
     @Published private(set) var lastRenamedEmulatorName: String?
     @Published private(set) var toolchainStatus: AndroidToolchainStatus
+    @Published private(set) var systemImageCatalogState: AndroidImageCatalogState = .idle
 
     private let runner: CommandRunning
     private let fileManager: FileManager
     private let avdRootOverride: URL?
     private let userDefaults: UserDefaults
+    private let systemImageCatalogService: AndroidImageCatalogService
     private var createCancellationFlag: CancellationFlag?
     private var sdkPathOverride: String?
-    private var systemImageCatalogSnapshot: SystemImageCatalogSnapshot?
-    private var systemImageCatalogTask: Task<SystemImageCatalogSnapshot, Error>?
 
     init(
         runner: CommandRunning = ProcessCommandRunner(),
         fileManager: FileManager = FileManager(),
         sdkPath: String = AndroidSDKLocator.preferredSDKPath(),
         avdRootOverride: URL? = nil,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        systemImageCatalogService: AndroidImageCatalogService = AndroidImageCatalogService()
     ) {
         self.runner = runner
         self.fileManager = fileManager
         self.avdRootOverride = avdRootOverride
         self.userDefaults = userDefaults
+        self.systemImageCatalogService = systemImageCatalogService
         self.sdkPathOverride = sdkPath
         self.toolchainStatus = AndroidSDKLocator.toolchainStatus(
             preferredSDKPath: sdkPath,
@@ -221,72 +217,71 @@ final class EmulatorManager: ObservableObject {
     }
 
     func warmSystemImageCatalogIfNeeded() {
-        guard toolchainStatus.isConfigured else { return }
-        guard systemImageCatalogSnapshot?.sdkPath != toolchainStatus.sdkPath else { return }
-        guard systemImageCatalogTask == nil else { return }
-        systemImageCatalogTask = makeSystemImageCatalogTask(for: toolchainStatus.sdkPath)
-    }
+        guard let request = try? systemImageCatalogRequest(for: "Loading Android versions") else { return }
+        guard !systemImageCatalogState.isLoaded(for: request.sdkPath) else { return }
 
-    func loadSystemImagesWithDebugOutput() async throws -> (images: [AndroidSystemImage], output: String) {
-        let snapshot = try await systemImageCatalogSnapshotValue()
-        return (images: snapshot.images, output: snapshot.output)
-    }
-
-    private func systemImageCatalogSnapshotValue() async throws -> SystemImageCatalogSnapshot {
-        _ = try requireToolchain(for: "Loading Android versions")
-        let sdkPath = toolchainStatus.sdkPath
-        if let snapshot = systemImageCatalogSnapshot, snapshot.sdkPath == sdkPath {
-            return snapshot
+        systemImageCatalogState = .loading
+        Task {
+            await systemImageCatalogService.warmIfNeeded(using: request)
+            await refreshSystemImageCatalogState(using: request)
         }
+    }
 
-        let task = systemImageCatalogTask ?? makeSystemImageCatalogTask(for: sdkPath)
-        systemImageCatalogTask = task
+    func loadSystemImagesWithDebugOutput() async throws -> AndroidImageCatalogLoadResult {
+        let request = try systemImageCatalogRequest(for: "Loading Android versions")
+        systemImageCatalogState = .loading
 
         do {
-            let snapshot = try await task.value
-            if snapshot.sdkPath == toolchainStatus.sdkPath {
-                systemImageCatalogSnapshot = snapshot
-                if systemImageCatalogTask == task {
-                    systemImageCatalogTask = nil
-                }
+            let result = try await systemImageCatalogService.load(using: request)
+            if toolchainStatus.sdkPath == result.sdkPath {
+                systemImageCatalogState = .loaded(result)
             }
-            return snapshot
+            return result
         } catch {
-            if systemImageCatalogTask == task {
-                systemImageCatalogTask = nil
+            if let loadError = error as? AndroidImageCatalogLoadError, toolchainStatus.sdkPath == request.sdkPath {
+                systemImageCatalogState = .failed(
+                    message: "Could not load Android versions.",
+                    output: loadError.output
+                )
             }
             throw error
         }
     }
 
-    private func makeSystemImageCatalogTask(for sdkPath: String) -> Task<SystemImageCatalogSnapshot, Error> {
-        let runner = self.runner
-        let executable = AndroidSDKLocator.resolveToolchain(for: sdkPath, fileManager: fileManager).sdkManager
-
-        return Task.detached(priority: .utility) {
-            let result = try runner.run(Command(
-                executable: executable,
-                arguments: ["--list"]
-            ))
-
-            let combinedOutput = """
-            $ \(executable) --list
-            \(result.stdout)
-            \(result.stderr)
-            """
-
-            return SystemImageCatalogSnapshot(
-                sdkPath: sdkPath,
-                images: AndroidSystemImageCatalog.parse(from: result.stdout),
-                output: combinedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-        }
+    private func systemImageCatalogRequest(for action: String) throws -> AndroidImageCatalogRequest {
+        let toolchain = try requireToolchain(for: action)
+        return AndroidImageCatalogRequest(
+            sdkPath: toolchain.sdkPath,
+            sdkManagerExecutable: toolchain.sdkManager,
+            runner: runner
+        )
     }
 
     private func invalidateSystemImageCatalog() {
-        systemImageCatalogTask?.cancel()
-        systemImageCatalogTask = nil
-        systemImageCatalogSnapshot = nil
+        systemImageCatalogState = .idle
+        Task {
+            await systemImageCatalogService.invalidate()
+        }
+    }
+
+    private func refreshSystemImageCatalogState(using request: AndroidImageCatalogRequest) async {
+        do {
+            let result = try await systemImageCatalogService.load(using: request)
+            guard toolchainStatus.sdkPath == result.sdkPath else { return }
+            systemImageCatalogState = .loaded(result)
+        } catch let loadError as AndroidImageCatalogLoadError {
+            guard toolchainStatus.sdkPath == request.sdkPath else { return }
+            systemImageCatalogState = .failed(
+                message: "Could not load Android versions.",
+                output: loadError.output
+            )
+        } catch {
+            guard toolchainStatus.sdkPath == request.sdkPath else { return }
+            systemImageCatalogState = .failed(
+                message: "Could not load Android versions.",
+                output: error.localizedDescription
+            )
+        }
     }
 
     func createAVD(from configuration: CreateAVDResolvedConfiguration) async -> Bool {
