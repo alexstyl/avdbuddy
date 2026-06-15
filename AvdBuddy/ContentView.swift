@@ -193,7 +193,9 @@ struct ContentView: View {
                                     onRightClick: {
                                         handleContextClick(for: emulator)
                                     },
-                                    menuActions: menuActions(for: emulator)
+                                    menuActions: {
+                                        menuActions(for: emulator)
+                                    }
                                 )
                             }
                         }
@@ -276,6 +278,9 @@ struct ContentView: View {
     }
 
     private func handleContextClick(for emulator: EmulatorInstance) {
+        if manager.isToolchainConfigured {
+            manager.refreshRunningStates()
+        }
         if !selectedEmulatorIDs.contains(emulator.id) {
             selectedEmulatorIDs = [emulator.id]
         }
@@ -325,6 +330,32 @@ struct ContentView: View {
         }
 
         return [
+            CardMenuAction(
+                title: "Start",
+                systemImage: nil,
+                isDestructive: false,
+                isEnabled: !manager.isRunning(emulator) && !manager.isBusy && !manager.isDeleting(emulator),
+                handler: {
+                    launch(emulator)
+                }
+            ),
+            CardMenuAction(
+                title: "Stop",
+                systemImage: nil,
+                isDestructive: false,
+                isEnabled: manager.isRunning(emulator) && !manager.isBusy && !manager.isDeleting(emulator),
+                handler: {
+                    stop(emulator)
+                }
+            ),
+            CardMenuAction(
+                title: "",
+                systemImage: nil,
+                isDestructive: false,
+                isEnabled: false,
+                isSeparator: true,
+                handler: {}
+            ),
             CardMenuAction(
                 title: "Show in Finder",
                 systemImage: "folder",
@@ -396,6 +427,19 @@ struct ContentView: View {
             return
         }
         Task { await manager.launch(emulator) }
+    }
+
+    private func stop(_ emulator: EmulatorInstance) {
+        guard manager.isRunning(emulator) else {
+            manager.statusMessage = "\(emulator.name) is not running."
+            return
+        }
+        guard manager.isToolchainConfigured else {
+            manager.statusMessage = manager.toolchainStatus.actionMessage(for: "Stopping an emulator")
+            isPresentingSDKSetup = true
+            return
+        }
+        Task { await manager.stop(emulator) }
     }
 
     private func presentCreateFlow() {

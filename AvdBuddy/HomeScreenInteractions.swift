@@ -25,7 +25,7 @@ struct CardInteractionView: NSViewRepresentable {
     let onSingleClick: (NSEvent.ModifierFlags) -> Void
     let onDoubleClick: () -> Void
     let onRightClick: () -> Void
-    let menuActions: [CardMenuAction]
+    let menuActions: () -> [CardMenuAction]
 
     func makeNSView(context: Context) -> CardInteractionNSView {
         let view = CardInteractionNSView()
@@ -168,7 +168,7 @@ final class CardInteractionNSView: NSView {
     var onSingleClick: ((NSEvent.ModifierFlags) -> Void)?
     var onDoubleClick: (() -> Void)?
     var onRightClick: (() -> Void)?
-    var menuActions: [CardMenuAction] = []
+    var menuActions: () -> [CardMenuAction] = { [] }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         self
@@ -186,7 +186,8 @@ final class CardInteractionNSView: NSView {
         onRightClick?()
 
         let menu = NSMenu()
-        for action in menuActions {
+        menu.autoenablesItems = false
+        for action in menuActions() {
             if action.isSeparator {
                 menu.addItem(.separator())
                 continue
