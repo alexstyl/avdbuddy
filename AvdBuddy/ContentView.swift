@@ -340,6 +340,15 @@ struct ContentView: View {
                 }
             ),
             CardMenuAction(
+                title: "Cold Boot",
+                systemImage: nil,
+                isDestructive: false,
+                isEnabled: !manager.isRunning(emulator) && !manager.isBusy && !manager.isDeleting(emulator),
+                handler: {
+                    launch(emulator, coldBoot: true)
+                }
+            ),
+            CardMenuAction(
                 title: "Stop",
                 systemImage: nil,
                 isDestructive: false,
@@ -416,7 +425,7 @@ struct ContentView: View {
         ]
     }
 
-    private func launch(_ emulator: EmulatorInstance) {
+    private func launch(_ emulator: EmulatorInstance, coldBoot: Bool = false) {
         guard !manager.isRunning(emulator) else {
             manager.statusMessage = "\(emulator.name) is already running."
             return
@@ -426,7 +435,7 @@ struct ContentView: View {
             isPresentingSDKSetup = true
             return
         }
-        Task { await manager.launch(emulator) }
+        Task { await manager.launch(emulator, coldBoot: coldBoot) }
     }
 
     private func stop(_ emulator: EmulatorInstance) {

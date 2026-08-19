@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added Start and Stop actions to emulator context menus, enabling each action based on the emulator's current running state.
+- Added a Cold Boot action to emulator context menus that launches the selected AVD without loading a snapshot.
 
 ## [0.5.0] - 2026-03-04
 
