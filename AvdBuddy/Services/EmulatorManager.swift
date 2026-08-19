@@ -389,16 +389,16 @@ final class EmulatorManager: ObservableObject {
         createCancellationFlag?.cancel()
     }
 
-    func launch(_ emulator: EmulatorInstance) async {
+    func launch(_ emulator: EmulatorInstance, coldBoot: Bool = false) async {
         guard !isBusy else { return }
         guard !deletingEmulatorNames.contains(emulator.name) else { return }
         isBusy = true
         defer { isBusy = false }
 
         do {
-            try launchEmulator(named: emulator.name)
+            try launchEmulator(named: emulator.name, coldBoot: coldBoot)
             runningEmulatorNames.insert(emulator.name)
-            statusMessage = "Launched \(emulator.name)."
+            statusMessage = coldBoot ? "Cold booted \(emulator.name)." : "Launched \(emulator.name)."
         } catch {
             statusMessage = "Launch failed: \(error.localizedDescription)"
         }
@@ -812,10 +812,14 @@ final class EmulatorManager: ObservableObject {
         }
     }
 
-    private func launchEmulator(named avdName: String) throws {
+    private func launchEmulator(named avdName: String, coldBoot: Bool = false) throws {
         let toolchain = try requireToolchain(for: "Launching an emulator")
         let emulatorBinary = toolchain.emulator
         var arguments = ["-avd", avdName]
+
+        if coldBoot {
+            arguments.append("-no-snapshot-load")
+        }
 
         if let launchSkin = launchSkinConfiguration(forAVDNamed: avdName, sdkRootPath: toolchain.sdkPath) {
             arguments.append(contentsOf: ["-skindir", launchSkin.directoryPath, "-skin", launchSkin.skinName])

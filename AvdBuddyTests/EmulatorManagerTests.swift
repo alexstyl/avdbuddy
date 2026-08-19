@@ -478,6 +478,28 @@ struct EmulatorManagerTests {
     }
 
     @Test @MainActor
+    func coldBootsEmulatorWithoutLoadingSnapshot() async throws {
+        let sdkRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: sdkRoot) }
+        try createSDKToolchainFixture(at: sdkRoot)
+
+        let runner = MockRunner()
+        let manager = EmulatorManager(
+            runner: runner,
+            fileManager: FileManager(),
+            sdkPath: sdkRoot.path
+        )
+
+        await manager.launch(EmulatorInstance(id: "a", name: "Pixel_API_24", apiLevel: 24), coldBoot: true)
+
+        #expect(runner.commands.count == 1)
+        #expect(runner.commands[0].executable == "\(sdkRoot.path)/emulator/emulator")
+        #expect(runner.commands[0].arguments == ["-avd", "Pixel_API_24", "-no-snapshot-load"])
+        #expect(runner.commands[0].waitForExit == false)
+        #expect(manager.statusMessage == "Cold booted Pixel_API_24.")
+    }
+
+    @Test @MainActor
     func launchesEmulatorWithDeviceSkinWhenFrameEnabled() async throws {
         let sdkRoot = try temporarySDKRoot()
         defer { try? FileManager().removeItem(at: sdkRoot) }
