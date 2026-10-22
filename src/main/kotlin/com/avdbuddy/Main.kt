@@ -206,7 +206,10 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
                 Label(device.displayName, weight=FontWeight.SemiBold, maxLines=1)
                 Spacer(Modifier.height(4.dp))
                 Label(if(device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api), size=11, color=Palette.muted, maxLines=1)
-                if(!running && device.name in state.starting) Label("Starting…", size=10, color=Palette.green)
+            }
+            if(device.name in state.starting) {
+                Spacer(Modifier.width(10.dp))
+                org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))
             }
         }
     }
