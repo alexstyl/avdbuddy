@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.*
+import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.semantics.contentDescription
@@ -24,7 +26,6 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import org.jetbrains.jewel.ui.component.*
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.Orientation
 import java.awt.Desktop
 import java.awt.FileDialog
@@ -76,24 +77,31 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     Text(text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 @Composable fun Rule() { Divider(Orientation.Horizontal, Modifier.fillMaxWidth()) }
-@Composable fun Icon(name: String, tint: Color = Color.Unspecified, modifier: Modifier = Modifier) {
-    val key = when(name) {
-        "plus" -> AllIconsKeys.General.Add
-        "play" -> AllIconsKeys.Actions.Execute
-        "stop" -> AllIconsKeys.Actions.Suspend
-        "settings" -> AllIconsKeys.General.Settings
-        "refresh" -> AllIconsKeys.Actions.Refresh
-        "more" -> AllIconsKeys.Actions.More
-        "close" -> AllIconsKeys.Actions.Close
-        "back" -> AllIconsKeys.Actions.Back
-        "check" -> AllIconsKeys.General.GreenCheckmark
-        "folder" -> AllIconsKeys.Nodes.Folder
-        "download" -> AllIconsKeys.Actions.Download
-        "info" -> AllIconsKeys.General.Information
-        "disk" -> AllIconsKeys.General.OpenDisk
-        else -> AllIconsKeys.Nodes.Desktop
+@Composable fun Icon(name: String, tint: Color = JewelTheme.contentColor, modifier: Modifier = Modifier.size(18.dp)) {
+    val iconBackground = JewelTheme.globalColors.panelBackground
+    Canvas(modifier) {
+        val s = size.width / 24f
+        fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(tint, Offset(x1*s,y1*s), Offset(x2*s,y2*s), 1.6f*s, StrokeCap.Round)
+        fun rect(x: Float, y: Float, w: Float, h: Float, r: Float = 2f) = drawRoundRect(tint, Offset(x*s,y*s), Size(w*s,h*s), CornerRadius(r*s), style = Stroke(1.6f*s))
+        when(name) {
+            "plus" -> { line(12f,5f,12f,19f); line(5f,12f,19f,12f) }
+            "play" -> drawPath(Path().apply { moveTo(8*s,4*s); lineTo(20*s,12*s); lineTo(8*s,20*s); close() }, tint)
+            "stop" -> drawRoundRect(tint, Offset(6*s,6*s), Size(12*s,12*s), CornerRadius(2*s))
+            "settings" -> { for(y in listOf(6f,12f,18f)) line(3f,y,21f,y); for((x,y) in listOf(8f to 6f,16f to 12f,10f to 18f)) { drawCircle(iconBackground,2.5f*s,Offset(x*s,y*s)); drawCircle(tint,2.5f*s,Offset(x*s,y*s),style=Stroke(1.5f*s)) } }
+            "refresh" -> { drawArc(tint, -50f, 285f, false, Offset(4*s,4*s), Size(16*s,16*s),style=Stroke(1.6f*s)); line(20f,3f,20f,9f); line(15f,9f,20f,9f) }
+            "more" -> for(x in listOf(5f,12f,19f)) drawCircle(tint,1.5f*s,Offset(x*s,12*s))
+            "close" -> { line(6f,6f,18f,18f); line(6f,18f,18f,6f) }
+            "back" -> { line(15f,5f,8f,12f); line(8f,12f,15f,19f) }
+            "check" -> { line(5f,12f,10f,17f); line(10f,17f,20f,6f) }
+            "folder" -> { rect(3f,7f,18f,14f); line(3f,7f,3f,4f); line(3f,4f,10f,4f); line(10f,4f,13f,7f) }
+            "download" -> { line(12f,3f,12f,15f); line(7f,10f,12f,15f); line(12f,15f,17f,10f); line(4f,17f,4f,21f); line(4f,21f,20f,21f); line(20f,21f,20f,17f) }
+            "info" -> { drawCircle(tint,9*s,center,style=Stroke(1.6f*s)); line(12f,10f,12f,17f); drawCircle(tint,1*s,Offset(12*s,7*s)) }
+            "tablet", "tv", "desktop", "automotive" -> { rect(2f,5f,20f,14f); line(9f,22f,15f,22f); line(12f,19f,12f,22f) }
+            "wear os" -> { rect(6f,6f,12f,12f,5f); line(9f,2f,15f,2f); line(9f,22f,15f,22f) }
+            "disk" -> { rect(3f,6f,18f,13f); line(3f,14f,21f,14f); drawCircle(tint,s,Offset(17*s,17*s)) }
+            else -> { rect(6f,2f,12f,20f,3f); line(10f,5f,14f,5f); line(10f,19f,14f,19f) }
+        }
     }
-    org.jetbrains.jewel.ui.component.Icon(key, contentDescription = null, modifier = modifier, tint = tint)
 }
 @Composable fun IconButton(name: String, description: String, tag: String = description, enabled: Boolean = true, onClick: () -> Unit) {
     Tooltip(tooltip = { Text(description) }) {
@@ -182,13 +190,14 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 .semantics { contentDescription="${device.displayName}, $subtitle" }
                 .clickable { state.selectPreview(device) }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-                Icon(if(running) "play" else "phone")
+                Icon(device.type.label.lowercase())
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Label(device.displayName, maxLines=1)
                     Spacer(Modifier.height(4.dp))
                     Label(subtitle, color=JewelTheme.globalColors.text.info, maxLines=1)
                 }
+                if(running && operation == null) Icon("play")
                 if(operation != null) {
                     Spacer(Modifier.width(10.dp))
                     org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))

@@ -6,6 +6,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
@@ -82,17 +84,19 @@ import androidx.compose.ui.unit.*
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
-            val bezel = 0.dp
+            val bezel = 9.dp
             // Keep one physical surface; its scale and touch coordinates never
             // change when it turns. The parent transform maps pointer positions.
             val naturalRatio = width.toFloat() / height.coerceAtLeast(1)
             val screenWidth = minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*naturalRatio).coerceAtLeast(1.dp)
             val screenHeight = screenWidth / naturalRatio
+            val outerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 34.dp)
+            val innerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 26.dp)
             Box(Modifier.requiredSize(screenWidth+bezel*2,screenHeight+bezel*2)
                 .graphicsLayer { rotationZ = angle }
-                .background(JewelTheme.globalColors.panelBackground)
+                .background(Color(0xFF101011), outerShape).border(2.dp, Color(0xFF666366), outerShape)
                 .padding(bezel).testTag("EmulatorBezel")) {
-                Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground)
+                Box(Modifier.fillMaxSize().clip(innerShape).background(Color(0xFF202022))
                     .focusRequester(focus).onPreviewKeyEvent { event ->
                         if (!running || rotating || event.type != KeyEventType.KeyDown) false else {
                             val code = when(event.key) { Key.Enter -> "66"; Key.Backspace -> "67"; Key.Escape -> "4"; Key.DirectionLeft -> "21"; Key.DirectionRight -> "22"; Key.DirectionUp -> "19"; Key.DirectionDown -> "20"; else -> null }
