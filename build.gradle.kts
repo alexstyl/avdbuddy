@@ -11,7 +11,9 @@ plugins {
 }
 val nightlyBuild = providers.gradleProperty("nightlyBuild").map(String::toBoolean).getOrElse(false)
 val nightlyBuildNumber = providers.gradleProperty("nightlyBuildNumber").getOrElse("0")
-val buildVersion = if (nightlyBuild) providers.gradleProperty("nightlyVersion").getOrElse("1.0.0-nightly.local") else "1.0.0"
+val buildVersion = if (nightlyBuild) providers.gradleProperty("nightlyVersion").orElse(providers.exec {
+    commandLine("git", "rev-parse", "--short=7", "HEAD")
+}.standardOutput.asText.map { "nightly.${it.trim()}" }).get() else "1.0.0"
 val buildChannel = if (nightlyBuild) "nightly" else "stable"
 tasks.processResources {
     inputs.property("buildChannel", buildChannel)

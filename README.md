@@ -119,15 +119,15 @@ required. Existing devices keep their configurations.
 
 Windows equivalent: `.\gradlew.bat test`.
 
-The **Platform checks** GitHub Actions workflow runs nightly against the latest
+The **Nightly** GitHub Actions workflow runs nightly against the latest
 `main` at 02:23 Asia/Bangkok (19:23 UTC). Every run forces the headless test task
 to execute, even when Gradle has cached results from an earlier run.
 
-You can also run it manually: Actions → Platform checks → Run workflow. Select a
+You can also run it manually: Actions → Nightly → Run workflow. Select a
 branch, or optionally enter a branch, tag, or commit in the `ref` field. CLI equivalent:
 
 ```bash
-gh workflow run platform-checks.yml -f ref=YOUR_BRANCH
+gh workflow run nightly.yml -f ref=YOUR_BRANCH
 ```
 
 Each macOS, Windows, and Linux job provisions the native Android tools, builds the
@@ -169,6 +169,10 @@ still needs troubleshooting.
 
 ## Nightly downloads
 
+Nightly app versions and download filenames use `nightly.<7-character commit SHA>`
+(for example, `nightly.1871d37`). Release tags also include the date and run number
+so repeated builds of the same commit have separate releases.
+
 Each successful nightly publishes a dated GitHub **prerelease** with installers
 for macOS Apple Silicon and Intel (DMG + ZIP), Windows x64 (installer EXE + ZIP),
 and Linux x64 (DEB + AppImage + ZIP). Java is bundled; an Android SDK is still
@@ -188,11 +192,11 @@ nightly releases are marked prerelease and `make_latest=false`, contain no
 macOS bundle. The packaging tool cannot publish releases itself; only the final
 workflow job can publish, after every platform passes.
 
-To build a nightly immediately, run **Platform checks** on `main` and enable the
+To build a nightly immediately, run **Nightly** on `main` and enable the
 **nightly** checkbox, or run:
 
 ```bash
-gh workflow run platform-checks.yml --ref main -f nightly=true
+gh workflow run nightly.yml --ref main -f nightly=true
 ```
 
 Branch runs can build downloadable workflow artifacts with that checkbox, but

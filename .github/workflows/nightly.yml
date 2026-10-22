@@ -1,4 +1,4 @@
-name: Platform checks
+name: Nightly
 
 on:
   schedule:
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: platform-checks-${{ github.ref }}-${{ inputs.ref || 'default' }}
+  group: nightly-${{ github.ref }}-${{ inputs.ref || 'default' }}
   cancel-in-progress: false
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "nightly=$NIGHTLY" >> "$GITHUB_OUTPUT"
           stamp="$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-          echo "version=1.0.0-nightly.$stamp" >> "$GITHUB_OUTPUT"
+          echo "version=nightly.$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
           echo "tag=nightly-$stamp" >> "$GITHUB_OUTPUT"
 
   check:
