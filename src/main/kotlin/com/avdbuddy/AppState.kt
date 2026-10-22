@@ -82,6 +82,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     var renameDevice by mutableStateOf<Device?>(null)
     var deleteDevices by mutableStateOf(emptyList<Device>())
     var creating by mutableStateOf(false); private set
+    var createCancelling by mutableStateOf(false); private set
     var createFinished by mutableStateOf(false); private set
     var createError by mutableStateOf(""); private set
     val output = MutableStateFlow("")
@@ -108,13 +109,13 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     }
     fun refreshAsync() = scope.launch { runCatching { refresh() }.onFailure { report(it) } }
     private fun report(t: Throwable) { status = t.message ?: t.toString(); error = true }
-    private fun action(success: String, block: (AndroidService) -> Unit) {
+    private fun action(success: String, onResult: (String?) -> Unit = {}, block: (AndroidService) -> Unit) {
         if (busy) return
         val backend = service
         scope.launch {
             busy = true; error = false
-            try { withContext(Dispatchers.IO) { block(backend) }; status = success; refresh() }
-            catch (t: Exception) { report(t) }
+            try { withContext(Dispatchers.IO) { block(backend) }; status = success; refresh(); onResult(null) }
+            catch (t: Exception) { if (t is CancellationException) throw t; report(t); onResult(t.message ?: "The operation could not be completed.") }
             finally { busy = false }
         }
     }
@@ -151,9 +152,12 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     }
     fun stopAll() = action("Stopped all running emulators.") { backend -> running.forEach { (name, serial) ->
         devices.firstOrNull { it.name == name }?.let { runCatching { display.capture(backend.settings, it, serial) } }; backend.stop(serial) } }
-    fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") { it.duplicate(device) }
-    fun rename(device: Device, name: String) = action("Renamed device to $name.") {
-        require(device.name !in running) { "Stop the device before renaming." }; it.rename(device, name.trim())
+    fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") {
+        require(device.name !in running && device.name !in starting) { "Stop ${device.displayName} before duplicating it." }
+        it.duplicate(device)
+    }
+    fun rename(device: Device, name: String, onResult: (String?) -> Unit = {}) = action("Renamed device to $name.", onResult) {
+        require(device.name !in running && device.name !in starting) { "Stop ${device.displayName} before renaming it." }; it.rename(device, name.trim())
     }
     fun delete(devices: List<Device>) = action("Deleted ${devices.size} device${if (devices.size == 1) "" else "s"}.") { backend ->
         devices.forEach { device -> running[device.name]?.let(backend::stop); backend.delete(device) }
@@ -193,7 +197,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     fun create(spec: CreateSpec) {
         if (busy) return
         cancellation = AtomicBoolean(); val token = cancellation; val backend = service
-        output.value = ""; createError = ""; createFinished = false; creating = true; busy = true
+        output.value = ""; createError = ""; createFinished = false; createCancelling = false; creating = true; busy = true
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -205,11 +209,11 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
                 refresh(); selected = setOf(spec.name); previewName = spec.name
                 images = images.map { if (it.path == spec.image.path) it.copy(installed = true) else it }
             } catch (t: Exception) { createError = if (token.get()) "Creation cancelled." else t.message ?: "Creation failed." }
-            finally { creating = false; busy = false }
+            finally { creating = false; createCancelling = false; busy = false }
         }
     }
-    fun cancelCreate() { cancellation.set(true) }
-    fun resetCreate() { createFinished = false; createError = ""; output.value = ""; showCreate = true; loadCatalog() }
+    fun cancelCreate() { if (creating) { createCancelling = true; cancellation.set(true) } }
+    fun resetCreate() { createCancelling = false; createFinished = false; createError = ""; output.value = ""; showCreate = true; loadCatalog() }
     fun copyDiagnostics() {
         val text = service.diagnostics()
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
