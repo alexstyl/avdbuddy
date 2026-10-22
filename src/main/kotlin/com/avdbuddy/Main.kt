@@ -136,10 +136,15 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 Spacer(Modifier.weight(1f))
                 IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
+            val sidebarDevices = state.devices.sortedWith(
+                compareBy<Device> { it.name !in state.running }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.displayName }
+                    .thenBy { it.name }
+            )
             androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                items(state.devices.size, key={state.devices[it].name}) { index ->
+                items(sidebarDevices.size, key={sidebarDevices[it].name}) { index ->
                     Box(Modifier.animateItem()) {
-                        DeviceRow(state.devices[index], state)
+                        DeviceRow(sidebarDevices[index], state)
                     }
                 }
             }
