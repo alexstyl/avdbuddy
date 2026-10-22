@@ -24,6 +24,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 tasks.test {
+    inputs.property("installedSdkSmoke", providers.environmentVariable("AVDBUDDY_TEST_INSTALLED_SDK").orElse("false"))
     useJUnitPlatform()
     maxParallelForks = 1
     systemProperty("java.awt.headless", "true")

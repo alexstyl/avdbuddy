@@ -92,4 +92,10 @@ class HostPlatformTest {
         assertNull(deviceNameError("Pixel_10", emptyList()))
     }
 
+    @Test fun `home expansion accepts both desktop separator conventions`() {
+        assertEquals(userHome.absoluteFile, expandPath("~"))
+        assertEquals(File(userHome, "Android SDK").absoluteFile, expandPath("~/Android SDK"))
+        assertEquals(File(userHome, "Android SDK").absoluteFile, expandPath("~\\Android SDK"))
+    }
+
 }

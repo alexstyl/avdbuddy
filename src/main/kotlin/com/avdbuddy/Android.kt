@@ -36,7 +36,14 @@ class SettingsStore(private val file: File = File(HostPlatform().configDirectory
     }
 }
 fun defaultAvdHome(): String = HostPlatform().defaultAvds.path
-fun expandPath(value: String): File = File(if ((value.trim().startsWith("~/") || value.trim().startsWith("~\\"))) File(userHome, value.trim().drop(2)).path else value.trim()).absoluteFile
+fun expandPath(value: String): File {
+    val path = value.trim()
+    return when {
+        path == "~" -> userHome
+        path.startsWith("~/") || path.startsWith("~\\") -> File(userHome, path.drop(2))
+        else -> File(path)
+    }.absoluteFile
+}
 fun readIni(file: File): Map<String, String> = if (!file.isFile) emptyMap() else file.readLines().mapNotNull {
     val i = it.indexOf('='); if (i < 0) null else it.take(i).trim() to it.drop(i + 1).trim()
 }.toMap()
@@ -99,8 +106,7 @@ class ProcessExecutor : CommandExecutor {
             process.outputStream.bufferedWriter().use { if (command.input != null) it.write(command.input) }
             while (!process.waitFor(100, java.util.concurrent.TimeUnit.MILLISECONDS)) {
                 if (cancelled.get() || Thread.currentThread().isInterrupted) {
-                    process.destroy()
-                    if (!process.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForcibly()
+                    stopProcessTree(process)
                     throw CancellationException("Operation cancelled.")
                 }
             }
@@ -108,7 +114,20 @@ class ProcessExecutor : CommandExecutor {
             val result = synchronized(text) { text.toString() }
             check(process.exitValue() == 0) { androidCommandError(result, process.exitValue()) }
             return result
-        } finally { if (process.isAlive) process.destroyForcibly() }
+        } finally { if (process.isAlive) stopProcessTree(process) }
+    }
+
+    private fun stopProcessTree(process: Process) {
+        // On Windows sdkmanager.bat starts a Java child. Killing only cmd.exe
+        // leaves the SDK operation running and holding its files open.
+        val children = process.descendants().use { it.toList() }.asReversed()
+        children.forEach { it.destroy() }
+        process.destroy()
+        try { process.waitFor(1, java.util.concurrent.TimeUnit.SECONDS) }
+        finally {
+            children.filter { it.isAlive }.forEach { it.destroyForcibly() }
+            if (process.isAlive) process.destroyForcibly()
+        }
     }
 }
 

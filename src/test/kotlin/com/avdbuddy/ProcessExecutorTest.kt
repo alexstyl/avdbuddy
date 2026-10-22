@@ -45,4 +45,19 @@ class ProcessExecutorTest {
             ProcessExecutor().run(fixtureCommand("wait"), AtomicBoolean(true)) {}
         }
     }
+    @Test fun `cancellation stops children of a launcher process`() {
+        val cancelled = AtomicBoolean()
+        val output = StringBuilder()
+        assertFailsWith<CancellationException> {
+            ProcessExecutor().run(fixtureCommand("spawn"), cancelled) { chunk ->
+                output.append(chunk)
+                if ('\n' in output) cancelled.set(true)
+            }
+        }
+        val pid = output.toString().trim().toLong()
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        while (ProcessHandle.of(pid).map { it.isAlive }.orElse(false) && System.nanoTime() < deadline) Thread.sleep(20)
+        assertFalse(ProcessHandle.of(pid).map { it.isAlive }.orElse(false), "Launcher child is still running")
+    }
+
 }
