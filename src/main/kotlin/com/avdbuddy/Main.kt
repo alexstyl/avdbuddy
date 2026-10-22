@@ -206,7 +206,7 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
                 Label(device.displayName, weight=FontWeight.SemiBold, maxLines=1)
                 Spacer(Modifier.height(4.dp))
                 Label(if(device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api), size=11, color=Palette.muted, maxLines=1)
-                if(running || device.name in state.starting) Label(if(running) "Running" else "Starting…", size=10, color=Palette.green)
+                if(!running && device.name in state.starting) Label("Starting…", size=10, color=Palette.green)
             }
         }
     }
