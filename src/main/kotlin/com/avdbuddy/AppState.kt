@@ -33,7 +33,26 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     val displayErrors = mutableStateMapOf<String, String>()
     var starting by mutableStateOf(setOf<String>()); private set
     val deviceOperations = mutableStateMapOf<String, String>()
-    fun selectPreview(device: Device) { previewName = device.name; selected = setOf(device.name) }
+    private var selectionAnchor: String? = null
+    fun selectPreview(device: Device) = selectDevice(device)
+    fun selectDevice(device: Device, toggle: Boolean = false, extend: Boolean = false,
+                     orderedNames: List<String> = devices.map { it.name }) {
+        val anchor = orderedNames.indexOf(selectionAnchor)
+        val target = orderedNames.indexOf(device.name)
+        selected = when {
+            extend && anchor >= 0 && target >= 0 -> {
+                val range = orderedNames.subList(minOf(anchor, target), maxOf(anchor, target) + 1).toSet()
+                if (toggle) selected + range else range
+            }
+            toggle -> if (device.name in selected) selected - device.name else selected + device.name
+            else -> setOf(device.name)
+        }
+        if (!extend || anchor < 0) selectionAnchor = device.name
+        previewName = if (device.name in selected) device.name else orderedNames.firstOrNull { it in selected }
+    }
+    fun selectForContextMenu(device: Device) {
+        if (device.name !in selected) selectDevice(device)
+    }
     suspend fun observeDisplays(): Unit = coroutineScope {
         launch {
             val loaded = mutableSetOf<String>()
@@ -186,46 +205,87 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         if (busy) return
         val backend = service
         deviceOperations.putAll(operations)
+        busy = true; error = false
         scope.launch {
-            busy = true; error = false
             try { withContext(Dispatchers.IO) { block(backend) }; status = success; refresh(); onResult(null) }
-            catch (t: Exception) { if (t is CancellationException) throw t; report(t); onResult(t.message ?: "The operation could not be completed.") }
+            catch (t: Exception) { if (t is CancellationException) throw t; runCatching { refresh() }; report(t); onResult(t.message ?: "The operation could not be completed.") }
             finally { operations.keys.forEach(deviceOperations::remove); busy = false }
         }
     }
     fun launch(device: Device) {
         if (busy || device.name in running || device.name in starting) return
         selectPreview(device)
-        starting = starting + device.name
+        launch(listOf(device))
+    }
+    fun launch(devices: List<Device>) {
+        if (busy) return
+        val targets = devices.distinctBy { it.name }.filter {
+            it.name !in running && it.name !in starting && !it.missingStorage
+        }
+        if (targets.isEmpty()) return
+        val names = targets.map { it.name }.toSet()
+        starting = starting + names
+        busy = true; error = false
         val backend = service
         scope.launch {
-            busy = true
+            val failures = mutableListOf<String>()
+            val launched = mutableSetOf<String>()
             try {
-                withContext(Dispatchers.IO) { backend.launch(device) }
-                status = "Starting ${device.displayName}…"; error = false
-            } catch (e: Exception) {
-                starting = starting - device.name
-                if (e is CancellationException) throw e
-                report(e); return@launch
+                for (device in targets) {
+                    try {
+                        withContext(Dispatchers.IO) { backend.launch(device) }
+                        launched += device.name
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        failures += "${device.displayName}: ${e.message}"
+                        starting = starting - device.name
+                    }
+                }
+                status = "Starting ${launched.size} device${if (launched.size == 1) "" else "s"}…"
             } finally { busy = false }
             try {
                 val started = withTimeoutOrNull(90_000) {
-                    while (device.name !in running) { refresh(); delay(1000) }
+                    while (!running.keys.containsAll(launched)) { refresh(); delay(1000) }
                     true
                 } ?: false
-                if (!started) { status = "${device.displayName} did not start. Try again or check the Android SDK."; error = true }
-                else status = "${device.displayName} is running."
-            } finally { starting = starting - device.name }
+                if (!started) failures += "Some devices did not start. Try again or check the Android SDK."
+                if (failures.isEmpty()) status = "${launched.size} device${if (launched.size == 1) " is" else "s are"} running."
+                else report(IllegalStateException(failures.joinToString("\n")))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                report(e)
+            } finally { starting = starting - names }
         }
     }
-    fun stop(device: Device) = action("Stopped ${device.displayName}.", operations = mapOf(device.name to "Shutting down…")) { backend ->
-        running[device.name]?.let { serial ->
-            runCatching { display.capture(backend.settings, device, serial) }
-            backend.stop(serial)
+    private fun forEachDevice(devices: List<Device>, block: (Device) -> Unit) {
+        val failures = mutableListOf<String>()
+        devices.distinctBy { it.name }.forEach { device ->
+            try { block(device) }
+            catch (e: Exception) {
+                if (e is CancellationException) throw e
+                failures += "${device.displayName}: ${e.message}"
+            }
+        }
+        check(failures.isEmpty()) { failures.joinToString("\n") }
+    }
+    fun stop(device: Device) = stop(listOf(device))
+    fun stop(devices: List<Device>) {
+        val targets = devices.filter { it.name in running && it.name !in starting }
+        val serials = running.toMap()
+        action("Stopped ${targets.size} device${if (targets.size == 1) "" else "s"}.", operations = targets.associate { it.name to "Shutting down…" }) { backend ->
+            forEachDevice(targets) { device -> serials[device.name]?.let { serial ->
+                runCatching { display.capture(backend.settings, device, serial) }
+                backend.stop(serial)
+            } }
         }
     }
-    fun restart(device: Device) = action("Restarting ${device.displayName}…", operations = mapOf(device.name to "Restarting…")) { backend ->
-        running[device.name]?.let(backend::restart)
+    fun restart(device: Device) = restart(listOf(device))
+    fun restart(devices: List<Device>) {
+        val targets = devices.filter { it.name in running && it.name !in starting }
+        val serials = running.toMap()
+        action("Restarting ${targets.size} device${if (targets.size == 1) "" else "s"}…", operations = targets.associate { it.name to "Restarting…" }) { backend ->
+            forEachDevice(targets) { device -> serials[device.name]?.let(backend::restart) }
+        }
     }
     fun stopAll() = action("Stopped all running emulators.", operations = running.keys.associateWith { "Shutting down…" }) { backend -> running.forEach { (name, serial) ->
         devices.firstOrNull { it.name == name }?.let { runCatching { display.capture(backend.settings, it, serial) } }; backend.stop(serial) } }
@@ -237,12 +297,18 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         require(device.name !in running && device.name !in starting) { "Stop ${device.displayName} before renaming it." }; it.rename(device, name.trim())
     }
     fun delete(devices: List<Device>) = action("Deleted ${devices.size} device${if (devices.size == 1) "" else "s"}.") { backend ->
-        devices.forEach { device -> running[device.name]?.let(backend::stop); backend.delete(device) }
+        forEachDevice(devices) { device ->
+            require(device.name !in starting) { "Wait for this device to finish starting before removing it." }
+            running[device.name]?.let(backend::stop); backend.delete(device)
+        }
     }
-    fun reveal(device: Device) = action("Opened ${device.displayName} in Finder.") {
-        val file = device.directory.takeIf(File::exists) ?: File(it.avdRoot, "${device.name}.ini")
-        require(file.exists()) { "The device's storage is unavailable." }
-        Desktop.getDesktop().browseFileDirectory(file)
+    fun reveal(device: Device) = reveal(listOf(device))
+    fun reveal(devices: List<Device>) = action("Opened ${devices.size} device${if (devices.size == 1) "" else "s"} in Finder.") { backend ->
+        forEachDevice(devices) { device ->
+            val file = device.directory.takeIf(File::exists) ?: File(backend.avdRoot, "${device.name}.ini")
+            require(file.exists()) { "The device's storage is unavailable." }
+            Desktop.getDesktop().browseFileDirectory(file)
+        }
     }
     fun saveSettings(sdk: String, avds: String): String? {
         if (busy) return "Wait for the current operation to finish."

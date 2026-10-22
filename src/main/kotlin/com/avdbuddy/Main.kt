@@ -76,7 +76,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     return when (event.key) {
         Key.N -> { if (!state.busy) state.resetCreate(); true }
         Key.Comma -> { state.showSettings = true; true }
-        Key.Backspace -> { state.previewDevice?.let { state.deleteDevices = listOf(it) }; true }
+        Key.Backspace -> { if (!state.busy && state.selectedDevices.none { it.name in state.starting }) state.deleteDevices = state.selectedDevices; true }
         else -> false
     }
 }
@@ -136,7 +136,18 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 Spacer(Modifier.weight(1f))
                 IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
-            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) false
+                else if ((event.isMetaPressed || event.isCtrlPressed) && event.key == Key.A) {
+                    state.selected = state.devices.map { it.name }.toSet()
+                    true
+                } else if (event.key == Key.DirectionUp || event.key == Key.DirectionDown) {
+                    val current = state.devices.indexOfFirst { it.name == state.previewDevice?.name }
+                    val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (state.devices.size - 1).coerceAtLeast(0))
+                    state.devices.getOrNull(next)?.let { state.selectDevice(it, extend = event.isShiftPressed) }
+                    true
+                } else false
+            }, contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 items(state.devices.size, key={state.devices[it].name}) { index ->
                     Box(Modifier.animateItem()) {
                         DeviceRow(state.devices[index], state)
@@ -172,33 +183,51 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
 }
 
 @Composable private fun DeviceRow(device: Device, state: AppState) {
-    val selected = state.previewDevice?.name == device.name
+    val selected = device.name in state.selected
     val running = device.name in state.running
     val operation = state.deviceOperations[device.name]
         ?: if (device.name in state.starting) "Starting…" else null
     val subtitle = operation ?: if (device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api)
-    ContextMenuArea(items = { buildList {
-        if (!state.busy) {
-            if (running) {
-                add(ContextMenuItem("Shutdown") { state.stop(device) })
-                add(ContextMenuItem("Restart") { state.restart(device) })
-            } else if (device.name !in state.starting && !device.missingStorage) {
-                add(ContextMenuItem("Start") { state.launch(device) })
+    var clickModifiers by remember { mutableStateOf(PointerKeyboardModifiers()) }
+    val menuState = remember { ContextMenuState() }
+    LaunchedEffect(menuState.status) {
+        if (menuState.status is ContextMenuState.Status.Open) state.selectForContextMenu(device)
+    }
+    ContextMenuArea(state = menuState, items = {
+        val targets = if (device.name in state.selected) state.selectedDevices else listOf(device)
+        val startable = targets.filter { it.name !in state.running && it.name !in state.starting && !it.missingStorage }
+        val stoppable = targets.filter { it.name in state.running && it.name !in state.starting }
+        buildList {
+            if (!state.busy) {
+                if (startable.isNotEmpty()) add(ContextMenuItem("Start") { state.launch(startable) })
+                if (stoppable.isNotEmpty()) {
+                    add(ContextMenuItem("Stop") { state.stop(stoppable) })
+                    add(ContextMenuItem("Restart") { state.restart(stoppable) })
+                }
+                if (targets.size == 1 && device.name !in state.running && device.name !in state.starting) {
+                    add(ContextMenuItem("Duplicate") { state.duplicate(device) })
+                    add(ContextMenuItem("Rename…") { state.renameDevice = device })
+                }
+                add(ContextMenuItem("Show in Finder") { state.reveal(targets) })
+                if (targets.none { it.name in state.starting }) {
+                    add(ContextMenuItem("Remove…") { state.deleteDevices = targets })
+                }
             }
         }
-        if (!state.busy && device.name !in state.running) {
-            add(ContextMenuItem("Duplicate") { state.duplicate(device) })
-            add(ContextMenuItem("Rename…") { state.renameDevice=device })
-        }
-        add(ContextMenuItem("Show in Finder") { state.reveal(device) })
-        if (!state.busy) {
-            add(ContextMenuItem("Delete…") { state.deleteDevices=listOf(device) })
-        }
-    } }) {
+    }) {
         SimpleListItem(selected = selected, height = 56.dp,
             modifier = Modifier.fillMaxWidth().testTag("Device-${device.name}")
-                .semantics { contentDescription="${device.displayName}, $subtitle" }
-                .clickable { state.selectPreview(device) }) {
+                .semantics { contentDescription="${device.displayName}, $subtitle"; this.selected = selected }
+                .onPointerEvent(PointerEventType.Press, pass = PointerEventPass.Initial) { event ->
+                    if (event.buttons.isPrimaryPressed) {
+                        clickModifiers = event.keyboardModifiers
+                    }
+                }
+                .clickable {
+                    state.selectDevice(device, toggle = clickModifiers.isMetaPressed || clickModifiers.isCtrlPressed,
+                        extend = clickModifiers.isShiftPressed)
+                    clickModifiers = PointerKeyboardModifiers()
+                }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
                 Icon(device.type.label.lowercase())
                 Spacer(Modifier.width(10.dp))
