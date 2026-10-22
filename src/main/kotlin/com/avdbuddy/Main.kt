@@ -62,9 +62,21 @@ fun main(args: Array<String>) {
         val scope = rememberCoroutineScope()
         val state = remember { AppState(scope) }
         Window(onCloseRequest = ::exitApplication, title = "AvdBuddy", state = rememberWindowState(width = 1040.dp, height = 720.dp)) {
+            configureMacWindow(window)
             window.minimumSize = java.awt.Dimension(760, 540)
             AvdBuddyTheme { App(state) }
         }
+    }
+}
+
+// Keep AppKit's decorated window (including traffic lights, resize behavior and shadow),
+// while letting our two panels draw beneath its transparent title area.
+val macTitleInset get() = if(System.getProperty("os.name").contains("Mac")) 28.dp else 0.dp
+fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
+    if(System.getProperty("os.name").contains("Mac")) window.rootPane.apply {
+        putClientProperty("apple.awt.fullWindowContent", true)
+        putClientProperty("apple.awt.transparentTitleBar", true)
+        putClientProperty("apple.awt.windowTitleVisible", false)
     }
 }
 
@@ -121,31 +133,27 @@ fun main(args: Array<String>) {
             else -> false
         } else false
     }) {
-        Row(Modifier.fillMaxWidth().height(48.dp).background(Palette.toolbar).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon("phone", Palette.accent, Modifier.size(19.dp)); Spacer(Modifier.width(9.dp))
-            Label("AvdBuddy", weight = FontWeight.SemiBold, size = 14)
-            Spacer(Modifier.weight(1f))
-            IconButton("info", "About AvdBuddy", "About") { state.showAbout = true }
-            IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
-            IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings = true }
-            Spacer(Modifier.width(7.dp)); Box(Modifier.width(1.dp).height(18.dp).background(Palette.border)); Spacer(Modifier.width(7.dp))
-            IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if (state.ready) state.resetCreate() else state.showSettings = true }
-        }
-        Rule()
         Row(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.width(270.dp).fillMaxHeight().background(Palette.panel.copy(alpha=.55f)).testTag("DeviceSidebar")) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
+                Spacer(Modifier.height(macTitleInset))
+                Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
                     Label("Devices", color=Palette.muted, size=12)
                     Spacer(Modifier.weight(1f))
-                    Label("${state.devices.size}", color=Palette.muted, size=12)
+                    IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
                 }
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
                 }
                 if(state.running.isNotEmpty()) Box(Modifier.padding(12.dp)) { ActionButton("Stop all", enabled=!state.busy) { state.stopAll() } }
+                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                    IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
+                    IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
+                    Spacer(Modifier.weight(1f))
+                    IconButton("info", "About AvdBuddy", "About") { state.showAbout=true }
+                }
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.border))
-            Box(Modifier.weight(1f).fillMaxHeight()) {
+            Box(Modifier.weight(1f).fillMaxHeight().padding(top=macTitleInset)) {
                 val device = state.previewDevice
                 if (device != null) EmulatorPanel(device, state)
                 else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {

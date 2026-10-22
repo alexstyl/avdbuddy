@@ -8,14 +8,6 @@ import java.awt.Color
 import javax.imageio.ImageIO
 import kotlin.test.*
 
-class FixtureDisplay : DeviceDisplay {
-    val inputEvents = mutableListOf<List<String>>()
-    val captures = mutableListOf<String>()
-    private val screens = mutableMapOf<String,BufferedImage>()
-    override fun load(device: Device): BufferedImage = screens.getOrPut(device.name) { fixtureScreen(device.type == DeviceType.TABLET) }
-    override fun capture(settings: AppSettings, device: Device, serial: String): BufferedImage { captures.add(device.name); return load(device) }
-    override fun input(settings: AppSettings, serial: String, arguments: List<String>) { inputEvents.add(arguments) }
-}
 fun fixtureScreen(tablet: Boolean = false): BufferedImage {
     val w=if(tablet) 800 else 432; val h=960
     return BufferedImage(w,h,BufferedImage.TYPE_INT_RGB).apply {

@@ -19,17 +19,12 @@ dependencies {
     }
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
-    testImplementation("dev.sebastiano.spectre:spectre-core:0.7.1")
-    testImplementation("dev.sebastiano.spectre:spectre-testing:0.7.1")
-    testRuntimeOnly("dev.sebastiano.spectre:spectre-recording:0.7.1")
-    testRuntimeOnly("dev.sebastiano.spectre:spectre-recording-macos:0.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 tasks.test {
     useJUnitPlatform()
     maxParallelForks = 1
-    systemProperty("java.awt.headless", "false")
-    systemProperty("apple.awt.application.appearance", "NSAppearanceNameDarkAqua")
+    systemProperty("java.awt.headless", "true")
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     testLogging { events("passed", "failed", "skipped"); showStandardStreams = true }
 }

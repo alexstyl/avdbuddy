@@ -77,20 +77,30 @@ Boot state: normal emulator snapshot loading/saving remains enabled.
 
 ```bash
 ./gradlew test
-./scripts/verifyUI
 ```
 
-Backend tests use temporary SDK and AVD fixtures. The UI test uses
-[Spectre by Sebastiano Poggi](https://spectre.sebastiano.dev/) to drive real, visible
-Jewel/Compose windows: device selection without booting, monochrome/live preview
-transitions, touch input, changing storage, selecting a device type and system image,
-configuring and creating a device, launching it, confirming/cancelling deletion,
-and renaming. It verifies SDK-before-storage ordering and writes screenshots to
-`build/reports/spectre/`.
+Only backend tests run automatically. They use temporary SDK/AVD fixtures and run
+headlessly, without opening windows or clicking through the app.
 
-UI tests require an unlocked desktop session. Screenshot capture may require macOS
-Screen Recording permission for the Java runtime. Tests never install real Android
-images or change your personal device library.
+Use [Spectre](https://spectre.sebastiano.dev/) interactively against the running
+development app for UI inspection. The installed Spectre CLI supplies its agent
+when attaching; no Spectre dependency is packaged with the app. There are no runnable Compose/Spectre UI tests
+and no UI test script. Do not add or run automated UI test suites.
+
+```bash
+./scripts/runDev
+# In another terminal, find the AvdBuddy process and attach:
+spectre ps
+spectre attach <pid>
+spectre windows <session-id>
+spectre tree <session-id>
+# Inspect or interact as needed, then detach:
+spectre detach <session-id>
+```
+
+Interactive actions operate on the actual running app and its real devices.
+The last attach check encountered a Spectre session error; interactive attachment
+still needs troubleshooting.
 
 ## Packaging
 
