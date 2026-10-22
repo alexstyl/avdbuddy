@@ -216,6 +216,7 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         command(toolchain.emulator, args, detached = true)
     }
     fun stop(serial: String) { command(toolchain.adb, listOf("-s", serial, "emu", "kill")) }
+    fun restart(serial: String) { command(toolchain.adb, listOf("-s", serial, "reboot")) }
     fun requireAvdStorage() { require(avdRoot.isDirectory) { "Emulator storage is unavailable at ${avdRoot.path}. Connect its drive or choose another folder in Settings." } }
     fun validateName(name: String) {
         require(Regex("[A-Za-z0-9._-]+").matches(name)) { "Use letters, numbers, dots, underscores, or dashes in the name." }

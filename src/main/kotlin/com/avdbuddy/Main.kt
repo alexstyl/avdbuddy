@@ -186,6 +186,14 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
     val selected = state.previewDevice?.name == device.name
     val running = device.name in state.running
     ContextMenuArea(items = { buildList {
+        if (!state.busy) {
+            if (running) {
+                add(ContextMenuItem("Shutdown") { state.stop(device) })
+                add(ContextMenuItem("Restart") { state.restart(device) })
+            } else if (device.name !in state.starting && !device.missingStorage) {
+                add(ContextMenuItem("Start") { state.launch(device) })
+            }
+        }
         if (!state.busy && device.name !in state.running) {
             add(ContextMenuItem("Duplicate") { state.duplicate(device) })
             add(ContextMenuItem("Rename…") { state.renameDevice=device })

@@ -222,6 +222,9 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             backend.stop(serial)
         }
     }
+    fun restart(device: Device) = action("Restarting ${device.displayName}…") { backend ->
+        running[device.name]?.let(backend::restart)
+    }
     fun stopAll() = action("Stopped all running emulators.") { backend -> running.forEach { (name, serial) ->
         devices.firstOrNull { it.name == name }?.let { runCatching { display.capture(backend.settings, it, serial) } }; backend.stop(serial) } }
     fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") {
