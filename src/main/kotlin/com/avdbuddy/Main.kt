@@ -152,7 +152,11 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
                 IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
             androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
+                items(state.devices.size, key={state.devices[it].name}) { index ->
+                    Box(Modifier.animateItem()) {
+                        DeviceRow(state.devices[index], state)
+                    }
+                }
             }
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
                 IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
