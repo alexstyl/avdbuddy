@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 package com.avdbuddy
 
 import androidx.compose.foundation.*
@@ -6,10 +7,17 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import org.jetbrains.jewel.ui.theme.popupContainerStyle
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.dialog
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import org.jetbrains.jewel.ui.component.CheckboxRow
@@ -101,208 +109,105 @@ import java.net.URI
     }
 }
 
-@Composable fun CreateWindow(state:AppState) {
-    var step by remember { mutableStateOf(0) }
-    var type by remember { mutableStateOf(DeviceType.PHONE) }
-    var chosen by remember { mutableStateOf<SystemImage?>(null) }
-    val nameField = rememberTextFieldState("Pixel_"+(System.currentTimeMillis()%10000))
-    val name = nameField.text.toString()
-    val nameIssue = deviceNameError(name, state.devices.map { it.name })
-    var closeRequested by remember { mutableStateOf(false) }
-    LaunchedEffect(closeRequested, state.creating) { if (closeRequested && !state.creating) state.showCreate=false }
-    var profile by remember { mutableStateOf(type.profile) }
-    var ram by remember { mutableStateOf("Default") }
-    var storage by remember { mutableStateOf(16) }
-    var sd by remember { mutableStateOf(0) }
-    var frame by remember { mutableStateOf(true) }
-    val output by state.output.collectAsState()
-    var showProgress by remember { mutableStateOf(false) }
-    var reviewPlan by remember { mutableStateOf<StoragePlan?>(null) }
-    var reviewError by remember { mutableStateOf("") }
-    var reviewAttempt by remember { mutableStateOf(0) }
-    fun specification() = chosen?.let { CreateSpec(nameField.text.toString().trim(),it,profile,if(ram=="Default")null else ram.toInt()*1024,storage,sd.takeIf{it>0},frame) }
-    LaunchedEffect(step, chosen, storage, sd, state.settings, reviewAttempt, showProgress) {
-        if (step==3 && !showProgress) {
-            reviewPlan=null;reviewError=""
-            specification()?.let { spec ->
-                try { reviewPlan=state.reviewStorage(spec) }
-                catch(t:Exception) {
-                    if(t is kotlinx.coroutines.CancellationException) throw t
-                    reviewError=t.message ?: "Could not check storage requirements."
-                }
+@Composable fun CreateDeviceDialog(state: AppState) {
+    val profiles = remember { HardwareProfiles.all }
+    var profile by remember { mutableStateOf(profiles.first()) }
+    val images = remember(state.images) { googlePlayImages(state.images) }
+    var selectedPath by remember { mutableStateOf<String?>(null) }
+    val image = images.firstOrNull { it.path == selectedPath } ?: images.firstOrNull()
+    val nameField = rememberTextFieldState()
+    val suggestedName = suggestedDeviceName(profile.name, state.visibleDevices.map(Device::displayName))
+    val name = nameField.text.toString().trim().ifBlank { suggestedName }
+    val nameIssue = creationNameError(name, state.visibleDevices.map(Device::displayName))
+    val spec = image?.let { profile.createSpec(name, it, state.visibleDevices.map(Device::name)) }
+    var plan by remember { mutableStateOf<StoragePlan?>(null) }
+    var planError by remember { mutableStateOf("") }
+    var retry by remember { mutableStateOf(0) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(profile.id, image?.path, image?.installed, state.settings, retry) {
+        plan = null; planError = ""
+        if (spec != null && !state.catalogLoading) {
+            try { plan = state.reviewStorage(spec) }
+            catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                planError = e.message ?: "Could not check available storage."
             }
         }
     }
-    val title=if(showProgress)if(state.createFinished)"Your device is ready" else if(state.createError.isNotBlank())"Couldn’t create your device" else "Creating your device" else when(step){0->"What would you like to create?";1->"Choose an Android version";2->"Make it your own";else->"Review your device"}
-    Sheet(title,"CreateWindow",width=840,height=710,
-        scrollableContent=step!=1 && !showProgress,
-        contentPadding=if(step==1 && !showProgress) PaddingValues(start=24.dp,end=24.dp,top=20.dp) else PaddingValues(24.dp),
-        onClose={if(state.creating) {closeRequested=true;state.cancelCreate()} else state.showCreate=false},footer={
-        if(!showProgress) {
-            if(step==3 && reviewPlan?.canCreate==false) Label("Not enough disk space",color=JewelTheme.globalColors.text.error)
-            Spacer(Modifier.weight(1f))
-            ActionButton("Cancel",tag="CancelCreate"){state.showCreate=false}
-            if(step>0)ActionButton("Previous",tag="PreviousCreate"){step--}
-            ActionButton(if(step==3) "Create" else "Continue",primary=true,
-                enabled=!state.busy && (step!=1||chosen!=null) && (step!=2||nameIssue==null) && (step!=3 || (reviewPlan?.canCreate==true && reviewError.isBlank() && nameIssue==null)),tag="ContinueCreate") {
-                if(step<3) { step++;if(step==1)state.loadCatalog() } else specification()?.let { spec ->
-                    showProgress=true
-                    state.create(spec)
+    fun close() { state.showCreate = false }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(Modifier.matchParentSize().background(JewelTheme.popupContainerStyle.colors.shadow)
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { }
+            .testTag("CreateDialogBackdrop"))
+        Column(Modifier.width(510.dp).heightIn(max = 650.dp).padding(8.dp)
+            .background(JewelTheme.popupContainerStyle.colors.background, RoundedCornerShape(JewelTheme.popupContainerStyle.metrics.cornerSize))
+            .border(JewelTheme.popupContainerStyle.metrics.borderWidth, JewelTheme.popupContainerStyle.colors.border, RoundedCornerShape(JewelTheme.popupContainerStyle.metrics.cornerSize))
+            .onPreviewKeyEvent { event ->
+                if (event.key == androidx.compose.ui.input.key.Key.Escape && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) { close(); true } else false
+            }
+            .semantics { dialog(); paneTitle = "Create device" }.testTag("CreateDeviceDialog")) {
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 14.dp, top = 16.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label("Create device")
+                Spacer(Modifier.weight(1f))
+                IconButton("close", "Close create device", "CloseCreate") { close() }
+            }
+            Rule()
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Label("Name", color = JewelTheme.globalColors.text.info)
+                    org.jetbrains.jewel.ui.component.TextField(
+                        state = nameField,
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("DeviceName"),
+                        placeholder = { Text(suggestedName) },
+                    )
+                    if (nameIssue != null) Label(nameIssue, color = JewelTheme.globalColors.text.error)
                 }
-            }
-        } else {
-            if(state.creating) {Label(if(state.createCancelling) "Cancelling…" else "Installed Android images are kept if you cancel.",color=JewelTheme.globalColors.text.info);Spacer(Modifier.weight(1f));ActionButton("Cancel creation",enabled=!state.createCancelling,tag="CancelDownload"){state.cancelCreate()} }
-            else {Spacer(Modifier.weight(1f));if(state.createError.isNotBlank())ActionButton("Back",tag="BackFromError"){showProgress=false};ActionButton("Done",primary=true,tag="CreateDone"){state.showCreate=false}}
-        }
-    }) {
-        if(showProgress) {
-            if(state.createFinished) {
-                Box(Modifier.fillMaxWidth().padding(vertical=12.dp),contentAlignment=Alignment.Center){Icon("check",JewelTheme.contentColor,Modifier.size(44.dp))}
-                Label("$name is ready. Select it in the device list and press Play to start it.")
-            } else if(state.creating) {
-                Label(if(state.createCancelling) "Cancelling device creation…" else "Preparing Android and creating your device…",color=JewelTheme.globalColors.text.info)
-            }
-            if(state.createError.isNotBlank()) SelectionContainer { Label(state.createError,color=JewelTheme.globalColors.text.error,modifier=Modifier.testTag("CreateError")) }
-            ActivityLog(output, Modifier.weight(1f))
-
-        } else when(step) {
-            0 -> {
-                Label("Pick the kind of Android device you want to run.",color=JewelTheme.globalColors.text.info)
-                DeviceType.entries.chunked(2).forEach { row -> Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { row.forEach { option ->
-                    val selected=type==option
-                    RadioButtonRow(selected=selected, onClick={type=option;profile=option.profile;chosen=null}, modifier=Modifier.weight(1f).testTag("Type-${option.name}")) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically) {
-                            Icon(option.label.lowercase());Spacer(Modifier.width(13.dp));Label(option.label)
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Label("Device", color = JewelTheme.globalColors.text.info)
+                    Select(profile, profiles, { profile = it }, { it.name }, "DeviceProfile", Modifier.fillMaxWidth())
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Label("Android version", color = JewelTheme.globalColors.text.info)
+                    when {
+                        state.catalogLoading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))
+                            Label("Finding available Android versions…", color = JewelTheme.globalColors.text.info)
+                        }
+                        state.catalogError.isNotBlank() -> {
+                            Label(state.catalogError, color = JewelTheme.globalColors.text.error)
+                            ActionButton("Try again", tag = "RetryCatalog") { state.loadCatalog() }
+                        }
+                        image != null -> Select(image, images, { selectedPath = it.path },
+                            { "${androidFamilyTitle(it.api)} · API ${creationApiLabel(it)}" }, "AndroidVersion", Modifier.fillMaxWidth())
+                        else -> {
+                            Label("No compatible Google Play images are available for this computer.", color = JewelTheme.globalColors.text.info)
+                            ActionButton("Refresh versions", tag = "RetryCatalog") { state.loadCatalog(force = true) }
                         }
                     }
-                } } }
-            }
-            1 -> {
-                if(state.catalogLoading)Row(horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically){org.jetbrains.jewel.ui.component.CircularProgressIndicator();Label("Loading Android versions…",color=JewelTheme.globalColors.text.info)}
-                if(state.catalogError.isNotBlank()) {Label(state.catalogError,color=JewelTheme.globalColors.text.error);ActionButton("Try again"){state.loadCatalog()}}
-                if (!state.catalogLoading && state.catalogError.isBlank()) {
-                    AndroidImagePicker(state.images,type,chosen,onSelect={chosen=it})
                 }
-            }
-            2 -> {
-                Section("Identity","phone") {
-                    Label("Device name",color=JewelTheme.globalColors.text.info)
-                    Field(nameField,"DeviceName",Modifier.fillMaxWidth())
-                    Label(nameIssue ?: "Use letters, numbers, dots, underscores or hyphens.",color=if(nameIssue!=null) JewelTheme.globalColors.text.error else JewelTheme.globalColors.text.info)
-                    Label(chosen?.title.orEmpty(),color=JewelTheme.globalColors.text.info)
-                }
-                Section("General","settings") {
-                    val profileOptions=(state.profiles.filter { it.id==profile || when(type) {
-                        DeviceType.PHONE -> it.id.startsWith("pixel_")&&!it.id.contains("fold")&&!it.id.contains("tablet")
-                        DeviceType.FOLDABLE -> it.id.contains("fold")
-                        DeviceType.TABLET -> it.id.contains("tablet")
-                        DeviceType.WEAR -> it.id.startsWith("wear")
-                        DeviceType.TV -> it.id.startsWith("tv_")
-                        DeviceType.CAR -> it.id.startsWith("automotive")
-                        DeviceType.DESKTOP -> it.id.startsWith("desktop")
-                        DeviceType.XR -> it.id.startsWith("xr")
-                    }}.map{it.id}+profile).distinct()
-                    FormRow("Device profile"){Select(profile,profileOptions,{profile=it},{id->state.profiles.firstOrNull{it.id==id}?.name?:id},"DeviceProfile")}
-                    FormRow("Memory"){Select(ram,listOf("Default","2","4","8"),{ram=it},{if(it=="Default")it else "$it GB"},"Memory")}
-                    FormRow("Device frame"){CheckboxRow("Show frame",checked=frame,onCheckedChange={frame=it},modifier=Modifier.testTag("DeviceFrame"))}
-                }
-                Section("Storage","disk") {
-                    FormRow("Internal storage"){Select(storage,listOf(8,16,32,64),{storage=it},{"$it GiB"},"InternalStorage")}
-                    FormRow("SD card"){Select(sd,listOf(0,2,4,8),{sd=it},{if(it==0)"None" else "$it GiB"},"SdCard")}
-                    Label("Device files will be stored in ${state.settings.avds}",color=JewelTheme.globalColors.text.info)
-                }
-                Section("Android image","download") {
-                    Label(chosen?.description.orEmpty())
-                    val releaseImages = state.images.filter { type.accepts(it.tag) && it.api == chosen?.api }
-                    FormRow("Architecture") {
-                        Select(chosen?.abi.orEmpty(), releaseImages.map { it.abi }.distinct(), { abi ->
-                            val options = releaseImages.filter { it.abi == abi }
-                            chosen = options.firstOrNull { it.tag == chosen?.tag } ?: preferredSystemImage(options)
-                        }, { if(it=="arm64-v8a") "arm64" else it }, "Architecture")
-                    }
-                    FormRow("Google services") {
-                        val options = releaseImages.filter { it.abi == chosen?.abi }
-                        Select(chosen?.tag.orEmpty(), options.map { it.tag }.distinct(), { tag ->
-                            chosen = preferredSystemImage(options.filter { it.tag == tag })
-                        }, { tag -> options.firstOrNull { it.tag == tag }?.services.orEmpty() }, "GoogleServices")
-                    }
-                    Label(if(chosen?.installed==true)"This system image is already installed." else "The Android SDK will download this image before creating your device.",color=JewelTheme.globalColors.text.info)
-                }
-            }
-            3 -> {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(18.dp)) {
-                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-                        Section("Device", "phone") {
-                            FormRow("Name") { Label(name) }
-                            Label("${androidFamilyTitle(chosen?.api.orEmpty())} · ${androidApiSubtitle(chosen?.api.orEmpty())}")
-                            FormRow("Profile") { Label("${type.label} · ${state.profiles.firstOrNull{it.id==profile}?.name ?: profile}") }
-                            FormRow("Image") { Label("${chosen?.abi} · ${chosen?.services}") }
-                            FormRow("Memory / Frame") { Label("${if(ram=="Default") "Default memory" else "$ram GB"} · ${if(frame) "Shown" else "Hidden"}") }
+                if (image != null && !state.catalogLoading && state.catalogError.isBlank()) {
+                    when {
+                        planError.isNotBlank() -> {
+                            Label(planError, color = JewelTheme.globalColors.text.error)
+                            ActionButton("Retry storage check", tag = "RetryStorageCheck") { retry++ }
                         }
-                        Section("Device data", "disk") {
-                            FormRow("Internal storage capacity") { Label("$storage GiB") }
-                            FormRow("SD card capacity") { Label(if(sd==0) "None" else "$sd GiB") }
-                            Label("Device data grows as you use it. We budget its full capacity plus 1 GiB for cache, snapshots and configuration; this is not the amount allocated immediately.",color=JewelTheme.globalColors.text.info)
-                            Label(state.settings.avds,color=JewelTheme.globalColors.text.info)
-                        }
-                    }
-                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-                        Section("Android image", "download") {
-                            Label(if(chosen?.installed==true) "Already downloaded — no image download needed." else "This image will be downloaded before your device is created.",
-                                color=if(chosen?.installed==true) JewelTheme.contentColor else Color.Unspecified,modifier=Modifier.testTag("ReviewImageStatus"))
-                            reviewPlan?.let { plan ->
-                                if(chosen?.installed!=true) {
-                                    FormRow("Download") { Label(storageSize(plan.image.download)) }
-                                    FormRow("Unpacked image") { Label(storageSize(plan.image.unpacked)) }
-                                    Label("The download and unpacked files need space at the same time during installation. The installed image can be shared with other devices.",color=JewelTheme.globalColors.text.info)
-                                } else Label("The existing shared image takes no additional installation space.",color=JewelTheme.globalColors.text.info)
-                            }
-                        }
-                        Section("Space required", "disk") {
-                            if(reviewPlan==null && reviewError.isBlank()) Label("Checking image size and available disk space…",color=JewelTheme.globalColors.text.info,modifier=Modifier.testTag("ReviewStorageLoading"))
-                            if(reviewError.isNotBlank()) {
-                                Label(reviewError,color=JewelTheme.globalColors.text.error,modifier=Modifier.testTag("ReviewStorageError"))
-                                ActionButton("Retry storage check",tag="RetryStorageCheck") { reviewAttempt++ }
-                            }
-                            reviewPlan?.let { plan ->
-                                FormRow("Space needed during creation") { Label(storageSize(plan.required)) }
-                                plan.disks.forEach { disk ->
-                                    Label(disk.location)
-                                    Label("${storageSize(disk.required)} required · ${storageSize(disk.available)} available",color=if(disk.enough) JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.error)
-                                    Label(disk.path,color=JewelTheme.globalColors.text.info)
-                                }
-                                Label(if(plan.canCreate) "Enough disk space is available to create this device." else "Not enough available disk space to create this device. Free space or choose another storage location in Settings.",
-                                    color=if(plan.canCreate) JewelTheme.contentColor else JewelTheme.globalColors.text.error,modifier=Modifier.testTag("ReviewSpaceStatus"))
-                                if(chosen?.installed!=true) Label("Includes 1 GiB of installation workspace in addition to the image and device data budgets.",color=JewelTheme.globalColors.text.info)
-                                ActionButton("Refresh available space",tag="RefreshReviewSpace") { reviewAttempt++ }
-                            }
+                        plan?.canCreate == false -> {
+                            Label("Not enough storage. Free space or change the location in Settings.", color = JewelTheme.globalColors.text.error)
+                            ActionButton("Check again", tag = "RetryStorageCheck") { retry++ }
                         }
                     }
                 }
             }
-
-        }
-    }
-}
-
-@Composable
-fun ActivityLog(output: String, modifier: Modifier = Modifier) {
-    val scroll = rememberScrollState()
-    val horizontal = rememberScrollState()
-    LaunchedEffect(output, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
-    Column(modifier.fillMaxWidth().testTag("ActivityPanel")) {
-        Row(Modifier.padding(14.dp), verticalAlignment=Alignment.CenterVertically) {
-            Icon("download", modifier=Modifier.size(15.dp));Spacer(Modifier.width(9.dp));Label("Activity")
-        }
-        Rule()
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            SelectionContainer(Modifier.fillMaxSize().padding(end=12.dp,bottom=12.dp)) {
-                Text(output.ifBlank { "Preparing Android tools…" },
-                    Modifier.fillMaxSize().testTag("CreateOutput").verticalScroll(scroll).horizontalScroll(horizontal).padding(14.dp),
-                    style=JewelTheme.consoleTextStyle,softWrap=false)
+            Rule()
+            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                ActionButton("Cancel", tag = "CancelCreate") { close() }
+                ActionButton("Create", primary = true,
+                    enabled = !state.busy && !state.catalogLoading && state.catalogError.isBlank() && spec != null && nameIssue == null && plan?.canCreate == true && planError.isBlank(), tag = "ConfirmCreate") {
+                    spec?.let(state::create)
+                }
             }
-            VerticalScrollbar(rememberScrollbarAdapter(scroll),Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(bottom=12.dp))
-            HorizontalScrollbar(rememberScrollbarAdapter(horizontal),Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(end=12.dp))
         }
     }
 }
@@ -337,8 +242,8 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
             Label("Select a device in the sidebar to preview it. Selection never starts the emulator.")
             Label("Press Play to start it. A gray screen is the last captured preview; the running screen appears in color.")
             Label("Use Settings to reconnect an unavailable SDK or device folder. Changing folders leaves existing devices in place.")
-            Label("Shortcuts: ⌘N creates a device. ⌘, opens Settings. ⌘⌫ asks to delete the selected device.",color=JewelTheme.globalColors.text.info)
-            Label("While running: ⌘→ rotates clockwise. ⌘← rotates counterclockwise.",color=JewelTheme.globalColors.text.info)
+            Label("Shortcuts: ${HostPlatform().shortcutModifier}N creates a device. ${HostPlatform().shortcutModifier}, opens Settings. ${HostPlatform().shortcutModifier}Backspace asks to delete the selected device.",color=JewelTheme.globalColors.text.info)
+            Label("While running: ${HostPlatform().shortcutModifier}→ rotates clockwise. ${HostPlatform().shortcutModifier}← rotates counterclockwise.",color=JewelTheme.globalColors.text.info)
         }
         ActionButton("Copy diagnostics",tag="CopyDiagnostics"){state.copyDiagnostics()}
         Label("By Alex Styl · Inspired by VirtualBuddy",color=JewelTheme.globalColors.text.info)

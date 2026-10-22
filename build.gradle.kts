@@ -37,9 +37,13 @@ nucleus {
             languageVersion = JavaLanguageVersion.of(25)
             vendor = JvmVendorSpec.JETBRAINS
         }.get().metadata.installationPath.asFile.path
-        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED", "-Dapple.awt.application.name=AvdBuddy", "-Dapple.awt.application.appearance=NSAppearanceNameAqua")
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            jvmArgs += listOf("-Dapple.awt.application.name=AvdBuddy", "-Dapple.awt.application.appearance=NSAppearanceNameAqua")
+        }
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Zip)
+            targetFormats(TargetFormat.Zip)
+            if (System.getProperty("os.name").startsWith("Mac")) targetFormats(TargetFormat.Dmg)
             packageName = "AvdBuddy"
             packageVersion = "1.0.0"
             description = "Android Virtual Device manager"
@@ -65,4 +69,18 @@ nucleus {
             }
         }
     }
+}
+
+// Exercise the real command-line entry point without starting Compose or opening a window.
+tasks.register<JavaExec>("platformDiagnostics") {
+    group = "verification"
+    description = "Run application diagnostics headlessly on the current host"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.avdbuddy.MainKt")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.JETBRAINS
+    })
+    systemProperty("java.awt.headless", "true")
+    args("--diagnostics")
 }

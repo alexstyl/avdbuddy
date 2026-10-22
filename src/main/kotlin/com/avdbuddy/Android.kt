@@ -13,16 +13,16 @@ const val APP_VERSION = "1.0.0"
 val userHome: File get() = File(System.getProperty("user.home"))
 
 data class AppSettings(val sdk: String, val avds: String)
-class SettingsStore(private val file: File = File(userHome, "Library/Application Support/AvdBuddy/settings.properties")) {
+class SettingsStore(private val file: File = File(HostPlatform().configDirectory, "settings.properties")) {
     fun load(): AppSettings {
         val p = Properties().apply { if (file.isFile) file.inputStream().use(::load) }
-        fun legacy(key: String): String? = if (System.getProperty("os.name").contains("Mac")) runCatching {
+        fun legacy(key: String): String? = if (HostOs.detect() == HostOs.MAC) runCatching {
             val process = ProcessBuilder("/usr/bin/defaults", "read", "com.alexstyl.avdbuddy", key).start()
             val value = process.inputStream.bufferedReader().readText().trim()
             value.takeIf { process.waitFor() == 0 && it.isNotEmpty() }
         }.getOrNull() else null
         val sdk = p.getProperty("sdk") ?: legacy("android.sdk.path.override")
-            ?: System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME") ?: File(userHome, "Library/Android/sdk").path
+            ?: HostPlatform().defaultSdk.path
         val avds = p.getProperty("avds") ?: legacy("avdbuddy.avdStoragePath") ?: defaultAvdHome()
         return AppSettings(sdk, avds)
     }
@@ -35,10 +35,8 @@ class SettingsStore(private val file: File = File(userHome, "Library/Application
         } finally { temp.delete() }
     }
 }
-fun defaultAvdHome(): String = System.getenv("ANDROID_AVD_HOME")
-    ?: (System.getenv("ANDROID_EMULATOR_HOME") ?: System.getenv("ANDROID_USER_HOME"))?.let { File(it, "avd").path }
-    ?: File(userHome, ".android/avd").path
-fun expandPath(value: String): File = File(if (value.trim().startsWith("~/")) File(userHome, value.trim().drop(2)).path else value.trim()).absoluteFile
+fun defaultAvdHome(): String = HostPlatform().defaultAvds.path
+fun expandPath(value: String): File = File(if ((value.trim().startsWith("~/") || value.trim().startsWith("~\\"))) File(userHome, value.trim().drop(2)).path else value.trim()).absoluteFile
 fun readIni(file: File): Map<String, String> = if (!file.isFile) emptyMap() else file.readLines().mapNotNull {
     val i = it.indexOf('='); if (i < 0) null else it.take(i).trim() to it.drop(i + 1).trim()
 }.toMap()
@@ -47,15 +45,16 @@ fun writeIni(file: File, values: Map<String, String>) {
 }
 
 data class Toolchain(val root: File) {
+    private val host = HostPlatform()
     private fun tool(name: String): File {
         val dirs = File(root, "cmdline-tools").listFiles()?.filter(File::isDirectory).orEmpty()
         return (listOf(File(root, "cmdline-tools/latest/bin/$name")) + dirs.sortedByDescending { it.name }.map { File(it, "bin/$name") })
             .firstOrNull { it.canExecute() } ?: File(root, "cmdline-tools/latest/bin/$name")
     }
-    val sdkmanager get() = tool("sdkmanager")
-    val avdmanager get() = tool("avdmanager")
-    val emulator get() = File(root, "emulator/emulator")
-    val adb get() = File(root, "platform-tools/adb")
+    val sdkmanager get() = tool(host.script("sdkmanager"))
+    val avdmanager get() = tool(host.script("avdmanager"))
+    val emulator get() = File(root, "emulator/${host.executable("emulator")}")
+    val adb get() = File(root, "platform-tools/${host.executable("adb")}")
     val tools get() = linkedMapOf("sdkmanager" to sdkmanager, "avdmanager" to avdmanager, "emulator" to emulator, "adb" to adb)
     val ready get() = tools.values.all { it.isFile && it.canExecute() }
     fun requireReady() { require(ready) { "Choose an Android SDK with command-line tools, emulator, and platform-tools in Settings." } }
@@ -79,7 +78,7 @@ class ProcessExecutor : CommandExecutor {
         val builder = ProcessBuilder(listOf(command.executable.path) + command.args).redirectErrorStream(true)
         builder.environment().putAll(command.env)
         if (command.detached) {
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectInput(ProcessBuilder.Redirect.from(File("/dev/null"))).start()
+            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD).start().outputStream.close()
             return ""
         }
         val process = builder.start()
@@ -143,7 +142,7 @@ enum class DeviceType(val label: String, val profile: String) {
 }
 data class Device(val name: String, val directory: File, val config: Map<String, String>, val bytes: Long) {
     val type get() = DeviceType.from(config)
-    val api get() = Regex("android-([^/;]+)").find(config["image.sysdir.1"].orEmpty())?.groupValues?.get(1)
+    val api get() = Regex("android-([^/;\\\\]+)").find(config["image.sysdir.1"].orEmpty())?.groupValues?.get(1)
         ?: config["target"]?.removePrefix("android-") ?: "—"
     val displayName get() = config["avd.ini.displayname"]?.takeIf(String::isNotBlank) ?: name.replace('_', ' ')
     val missingStorage get() = !directory.isDirectory || directory.listFiles().orEmpty().any { Files.isSymbolicLink(it.toPath()) && !it.exists() }
@@ -175,13 +174,14 @@ fun parseImages(text: String): List<SystemImage> {
 }
 data class DeviceProfile(val id: String, val name: String)
 fun parseProfiles(text: String): List<DeviceProfile> = Regex("id:.*?\\\"([^\\\"]+)\\\"\\s*\\n\\s*Name: ([^\\n]+)").findAll(text).map { DeviceProfile(it.groupValues[1], it.groupValues[2].trim()) }.toList()
-data class CreateSpec(val name: String, val image: SystemImage, val profile: String, val ram: Int? = null, val storage: Int = 16, val sdCard: Int? = null, val frame: Boolean = true)
+data class CreateSpec(val name: String, val image: SystemImage, val profile: String, val ram: Int? = null, val storage: Int = 16, val sdCard: Int? = null, val frame: Boolean = true,
+    val hardware: HardwareProfile? = null, val displayName: String = name)
 
 class AndroidService(val settings: AppSettings, private val executor: CommandExecutor = ProcessExecutor()) {
     val toolchain = Toolchain(expandPath(settings.sdk))
     val avdRoot = expandPath(settings.avds)
     fun command(executable: File, args: List<String>, cancelled: AtomicBoolean = AtomicBoolean(), input: String? = null, detached: Boolean = false, output: (String) -> Unit = {}): String {
-        return executor.run(Command(executable, args, mapOf("ANDROID_AVD_HOME" to avdRoot.path, "ANDROID_HOME" to toolchain.root.path), input, detached), cancelled, output)
+        return executor.run(Command(executable, args, mapOf("ANDROID_AVD_HOME" to avdRoot.path, "ANDROID_HOME" to toolchain.root.path, "ANDROID_SDK_ROOT" to toolchain.root.path), input, detached), cancelled, output)
     }
     fun devices(): List<Device> = avdRoot.listFiles().orEmpty().filter { it.extension == "ini" }.sortedBy { it.name.lowercase() }.map { ini ->
         val name = ini.nameWithoutExtension
@@ -222,8 +222,23 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         require(Regex("[A-Za-z0-9._-]+").matches(name)) { "Use letters, numbers, dots, underscores, or dashes in the name." }
         require(!File(avdRoot, "$name.ini").exists() && !Files.exists(File(avdRoot, "$name.avd").toPath(), NOFOLLOW_LINKS)) { "A device named $name already exists." }
     }
-    fun create(spec: CreateSpec, cancelled: AtomicBoolean, output: (String) -> Unit) {
-        toolchain.requireReady(); validateName(spec.name)
+    private fun resolveCreationName(spec: CreateSpec): CreateSpec {
+        val issue = creationNameError(spec.displayName, devices().map(Device::displayName))
+        require(issue == null) { issue.orEmpty() }
+        // Unregistered directories and broken links also occupy storage names.
+        val occupied = avdRoot.listFiles().orEmpty().filter { it.extension in listOf("ini", "avd") }.map(File::nameWithoutExtension)
+        return spec.copy(name = availableAvdName(spec.displayName, occupied))
+    }
+
+    fun create(request: CreateSpec, cancelled: AtomicBoolean, output: (String) -> Unit): CreateSpec {
+        var spec = request
+        toolchain.requireReady()
+        if (spec.hardware == null) validateName(spec.name)
+        else require(creationNameError(spec.displayName) == null) { "Enter a valid device name." }
+        spec.hardware?.let { hardware ->
+            require(spec.profile == hardware.id && spec.ram == hardware.ramMiB && spec.storage == hardware.storageGiB && spec.sdCard == null && spec.frame) { "Built-in device settings are fixed by the profile." }
+            require(spec.image in googlePlayImages(listOf(spec.image))) { "This device needs a host-native Google Play image." }
+        }
         if (avdRoot.path == defaultAvdHome() && !avdRoot.exists() && avdRoot.toPath().startsWith(userHome.toPath())) avdRoot.mkdirs()
         requireAvdStorage()
         val images = File(toolchain.root, "system-images")
@@ -235,13 +250,19 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
             command(toolchain.sdkmanager, listOf("--install", spec.image.path), cancelled, input = "y\n".repeat(32), output = output)
         } else output("Using installed Android image. No download needed.\n")
         if (cancelled.get()) throw CancellationException("Creation cancelled.")
-        val args = mutableListOf("create", "avd", "-n", spec.name, "-k", spec.image.path, "-d", spec.profile, "-p", File(avdRoot, "${spec.name}.avd").path)
+        // Resolve immediately before creation: the UI's device list can be stale,
+        // and a long image download may outlive changes made by another SDK tool.
+        if (spec.hardware != null) spec = resolveCreationName(spec)
+        validateName(spec.name)
+        val args = mutableListOf("create", "avd", "-n", spec.name, "-k", spec.image.path, "-p", File(avdRoot, "${spec.name}.avd").path)
+        // Bundled profiles are self-contained and need no matching SDK device definition.
+        if (spec.hardware == null) args += listOf("-d", spec.profile)
         spec.sdCard?.let { args += listOf("-c", "${it * 1024}M") }
         command(toolchain.avdmanager, args, cancelled, input = "no\n", output = output)
         val iniFile = File(avdRoot, "${spec.name}.ini")
         val dir = readIni(iniFile)["path"]?.let(::File) ?: File(avdRoot, "${spec.name}.avd")
         val config = readIni(File(dir, "config.ini")).toMutableMap()
-        config["avd.ini.displayname"] = spec.name
+        config["avd.ini.displayname"] = spec.displayName
         config["disk.dataPartition.size"] = "${spec.storage}G"
         config["showDeviceFrame"] = if (spec.frame) "yes" else "no"
         config["hw.gpu.enabled"] = "yes"
@@ -249,8 +270,36 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         spec.ram?.let { config["hw.ramSize"] = it.toString() }
         val skin = File(toolchain.root, "skins/${spec.profile}")
         if (spec.frame && skin.isDirectory) { config["skin.name"] = spec.profile; config["skin.path"] = skin.path; config["skin.dynamic"] = "yes" }
+        spec.hardware?.let { profile ->
+            val bundledSkin = profile.installFrame(dir)
+            config.putAll(mapOf(
+                "avdbuddy.profile" to profile.id,
+                "hw.device.name" to profile.id.replace('-', '_'),
+                "hw.device.manufacturer" to "Google",
+                "hw.lcd.width" to profile.display.width.toString(),
+                "hw.lcd.height" to profile.display.height.toString(),
+                "hw.lcd.density" to profile.display.density.toString(),
+                "hw.initialOrientation" to "portrait",
+                "hw.keyboard" to "yes",
+                "hw.mainKeys" to "no",
+                "hw.dPad" to "no",
+                "hw.trackBall" to "no",
+                "hw.gps" to "yes",
+                "hw.accelerometer" to "yes",
+                "hw.sensors.orientation" to "yes",
+                "hw.camera.back" to "virtualscene",
+                "hw.camera.front" to "emulated",
+                "PlayStore.enabled" to "true",
+                "skin.name" to bundledSkin.name,
+                "skin.path" to bundledSkin.path,
+                "skin.dynamic" to "yes",
+            ))
+            // Do not inherit a generic profile's identity hash.
+            config.remove("hw.device.hash2")
+        }
         if (spec.profile.startsWith("tv_") || spec.profile.contains("landscape")) config["hw.initialOrientation"] = "landscape"
         writeIni(File(dir, "config.ini"), config)
+        return spec
     }
     fun delete(device: Device) { toolchain.requireReady(); requireAvdStorage(); command(toolchain.avdmanager, listOf("delete", "avd", "-n", device.name)) }
     fun duplicate(device: Device): String {

@@ -14,7 +14,7 @@ class FakeAndroid(val root:File) : CommandExecutor {
     var additionalImages = ""
     var installFailure: String? = null
     init {
-        listOf("cmdline-tools/latest/bin/sdkmanager","cmdline-tools/latest/bin/avdmanager","emulator/emulator","platform-tools/adb").forEach { path -> File(sdk,path).apply{parentFile.mkdirs();writeText("#!/bin/sh\n");setExecutable(true)} }
+        Toolchain(sdk).tools.values.map { it.relativeTo(sdk).path }.forEach { path -> File(sdk,path).apply{parentFile.mkdirs();writeText("#!/bin/sh\n");setExecutable(true)} }
         avds.mkdirs()
     }
     val settings get()=AppSettings(sdk.path,avds.path)
@@ -97,13 +97,9 @@ class AndroidServiceTest {
         store.save(settings);assertEquals(settings,store.load())
     }
     @Test fun `command failure reports disk exhaustion without repeating progress output`() {
-        val script=File(root,"fail.sh").apply {
-            writeText("#!/bin/sh\nprintf '[===] 55%% Unzipping...\\rWarning: An error occurred: No space left on device.\\n'\nexit 1\n")
-            setExecutable(true)
-        }
         val streamed=StringBuilder()
         val failure=assertFailsWith<IllegalStateException> {
-            ProcessExecutor().run(Command(script,emptyList()),AtomicBoolean()) { streamed.append(it) }
+            ProcessExecutor().run(fixtureCommand("fail"),AtomicBoolean()) { streamed.append(it) }
         }
         assertContains(streamed.toString(),"55%")
         assertContains(failure.message.orEmpty(),"Not enough disk space")

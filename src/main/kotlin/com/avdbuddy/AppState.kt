@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
@@ -27,7 +26,11 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     var running by mutableStateOf(emptyMap<String, String>()); private set
     var selected by mutableStateOf(setOf<String>())
     var previewName by mutableStateOf<String?>(null)
-    val previewDevice get() = devices.firstOrNull { it.name == previewName } ?: selectedDevices.firstOrNull() ?: devices.firstOrNull()
+    var pendingCreation by mutableStateOf<Device?>(null); private set
+    val visibleDevices get() = pendingCreation?.let { pending ->
+        devices.filterNot { it.name == pending.name || it.displayName == pending.displayName } + pending
+    } ?: devices
+    val previewDevice get() = visibleDevices.firstOrNull { it.name == previewName } ?: selectedDevices.firstOrNull() ?: visibleDevices.firstOrNull()
     val frames = mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
     val frameRotations = mutableStateMapOf<String, Int>()
     val displayErrors = mutableStateMapOf<String, String>()
@@ -171,6 +174,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     var createCancelling by mutableStateOf(false); private set
     var createFinished by mutableStateOf(false); private set
     var createError by mutableStateOf(""); private set
+    var creationSpec by mutableStateOf<CreateSpec?>(null); private set
     val output = MutableStateFlow("")
     private var cancellation = AtomicBoolean()
     private var catalogJob: Job? = null
@@ -182,7 +186,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     suspend fun refresh() {
         val backend = service
         val list = withContext(Dispatchers.IO) { backend.devices() }
-        if (settings == backend.settings) { devices = list; selected = selected.intersect(list.map { it.name }.toSet()) }
+        if (settings == backend.settings) { devices = list; selected = selected.intersect(visibleDevices.map { it.name }.toSet()) }
         val active = withContext(Dispatchers.IO) { runCatching { backend.running() }.getOrDefault(emptyMap()) }
         if (settings == backend.settings) {
             running.filter { (name, serial) -> active[name] != serial }.forEach { (name, serial) ->
@@ -303,11 +307,11 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         }
     }
     fun reveal(device: Device) = reveal(listOf(device))
-    fun reveal(devices: List<Device>) = action("Opened ${devices.size} device${if (devices.size == 1) "" else "s"} in Finder.") { backend ->
+    fun reveal(devices: List<Device>) = action("Opened ${devices.size} device${if (devices.size == 1) "" else "s"} in ${HostPlatform().fileManagerName}.") { backend ->
         forEachDevice(devices) { device ->
             val file = device.directory.takeIf(File::exists) ?: File(backend.avdRoot, "${device.name}.ini")
             require(file.exists()) { "The device's storage is unavailable." }
-            Desktop.getDesktop().browseFileDirectory(file)
+            revealInFileManager(file)
         }
     }
     fun saveSettings(sdk: String, avds: String): String? {
@@ -323,15 +327,15 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             refreshAsync(); null
         }.getOrElse { it.message ?: "Could not save settings." }
     }
-    fun loadCatalog() {
-        if (catalogLoading || images.isNotEmpty()) return
+    fun loadCatalog(force: Boolean = false) {
+        if (catalogLoading || (!force && images.isNotEmpty())) return
         val backend = service
         catalogJob = scope.launch {
             catalogLoading = true; catalogError = ""
             try {
                 backend.toolchain.requireReady()
-                val result = withContext(Dispatchers.IO) { backend.images() to backend.profiles() }
-                if (settings == backend.settings) { images = result.first; profiles = result.second }
+                val result = withContext(Dispatchers.IO) { backend.images() }
+                if (settings == backend.settings) images = result
             } catch (t: Exception) { if (t !is CancellationException) catalogError = t.message ?: "Could not load Android versions." }
             finally { catalogLoading = false }
         }
@@ -339,24 +343,61 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     suspend fun reviewStorage(spec: CreateSpec): StoragePlan = withContext(Dispatchers.IO) { storagePlanner(spec, settings) }
     fun create(spec: CreateSpec) {
         if (busy) return
+        val resumeCreated = createFinished && pendingCreation != null && creationSpec == spec
+        creationSpec = spec
         cancellation = AtomicBoolean(); val token = cancellation; val backend = service
+        pendingCreation = Device(spec.name, File(backend.avdRoot, "${spec.name}.avd"), buildMap {
+            put("avd.ini.displayname", spec.displayName)
+            put("hw.device.name", spec.profile.replace('-', '_'))
+            put("image.sysdir.1", spec.image.path.replace(';', '/') + "/")
+            spec.hardware?.let { profile ->
+                put("avdbuddy.profile", profile.id)
+                put("showDeviceFrame", "yes")
+                put("hw.lcd.width", profile.display.width.toString())
+                put("hw.lcd.height", profile.display.height.toString())
+                put("hw.lcd.density", profile.display.density.toString())
+            }
+        }, 0)
+        selectPreview(pendingCreation!!)
+        showCreate = false
         output.value = ""; createError = ""; createFinished = false; createCancelling = false; creating = true; busy = true
         scope.launch {
+            var startWhenReady: Device? = null
             try {
-                withContext(Dispatchers.IO) {
+                val created = if (resumeCreated) spec else withContext(Dispatchers.IO) {
                     val plan = storagePlanner(spec, backend.settings)
                     check(plan.canCreate) { "Not enough available disk space to create this device. Free space and review the storage requirements, then retry." }
-                    backend.validateName(spec.name)
                     backend.create(spec, token) { chunk -> output.update { (it + chunk.replace("\r\n", "\n").replace('\r', '\n')).takeLast(80_000) } } }
-                createFinished = true; status = "Created ${spec.name}."; error = false
-                refresh(); selected = setOf(spec.name); previewName = spec.name
+                creationSpec = created
+                pendingCreation = pendingCreation?.copy(name = created.name, directory = File(backend.avdRoot, "${created.name}.avd"))
+                pendingCreation?.let(::selectPreview)
+                createFinished = true; status = "Created ${created.displayName}."; error = false
+                refresh(); selected = setOf(created.name); previewName = created.name
                 images = images.map { if (it.path == spec.image.path) it.copy(installed = true) else it }
-            } catch (t: Exception) { createError = if (token.get()) "Creation cancelled." else t.message ?: "Creation failed." }
+                val device = devices.firstOrNull { it.name == created.name } ?: error("Your device was created but could not be loaded. Try again.")
+                pendingCreation = null
+                if (!token.get()) startWhenReady = device
+            } catch (t: Exception) {
+                if (token.get()) {
+                    discardPendingCreation()
+                    refreshAsync()
+                } else createError = t.message ?: "Could not set up your device. Try again."
+            }
             finally { creating = false; createCancelling = false; busy = false }
+            startWhenReady?.let(::launch)
         }
     }
     fun cancelCreate() { if (creating) { createCancelling = true; cancellation.set(true) } }
-    fun resetCreate() { createCancelling = false; createFinished = false; createError = ""; output.value = ""; showCreate = true; loadCatalog() }
+    fun resetCreate() { if (!busy) { showCreate = true; loadCatalog() } }
+
+    fun retryCreation() { if (!busy) creationSpec?.let(::create) }
+    fun discardPendingCreation() {
+        pendingCreation?.let { pending ->
+            selected = selected - pending.name
+            if (previewName == pending.name) previewName = devices.firstOrNull()?.name
+        }
+        pendingCreation = null; creationSpec = null; createError = ""; createFinished = false
+    }
     fun copyDiagnostics() {
         val text = service.diagnostics()
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)

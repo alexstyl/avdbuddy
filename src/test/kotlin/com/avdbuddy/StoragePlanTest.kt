@@ -13,7 +13,7 @@ import kotlin.test.*
 
 class StoragePlanTest {
     @TempDir lateinit var root:File
-    private val settings = AppSettings("/sdk", "/devices")
+    private val settings = AppSettings(File("sdk").absolutePath, File("devices").absolutePath)
     private fun spec(installed: Boolean=false, sd: Int?=null) = CreateSpec("Pixel",SystemImage("system-images;android-36;google_apis;arm64-v8a","Android",installed),"pixel_9",storage=16,sdCard=sd)
     @Test fun `same volume includes archive extraction and full device budget once`() {
         val plan=calculateStoragePlan(settings,spec(sd=2),ImageFootprint(2*GIB,8*GIB)) { DiskSpace("same",31*GIB) }
@@ -24,7 +24,7 @@ class StoragePlanTest {
     }
     @Test fun `separate SDK drive can block installation even with enough device space`() {
         val plan=calculateStoragePlan(settings,spec(),ImageFootprint(2*GIB,8*GIB)) { file ->
-            if(file.path=="/sdk") DiskSpace("sdk",10*GIB) else DiskSpace("device",50*GIB)
+            if(file == File(settings.sdk)) DiskSpace("sdk",10*GIB) else DiskSpace("device",50*GIB)
         }
         assertEquals(2,plan.disks.size)
         assertFalse(plan.disks[0].enough)
@@ -36,7 +36,7 @@ class StoragePlanTest {
         val plan=calculateStoragePlan(settings,spec(installed=true),ImageFootprint(0,0)) { file ->
             visited+=file;DiskSpace("device",17*GIB)
         }
-        assertEquals(listOf(File("/devices")),visited)
+        assertEquals(listOf(File(settings.avds)),visited)
         assertEquals(17*GIB,plan.required)
         assertTrue(plan.canCreate)
     }

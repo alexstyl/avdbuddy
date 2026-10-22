@@ -27,7 +27,7 @@ interface DeviceDisplay {
     fun rotate(serial: String, rotation: Int)
 }
 
-class AdbDeviceDisplay : DeviceDisplay {
+class AdbDeviceDisplay(private val processBuilder: (List<String>) -> ProcessBuilder = { ProcessBuilder(it) }) : DeviceDisplay {
     private val live = EmulatorScreenStream()
     override fun rotate(serial: String, rotation: Int) = live.rotate(serial, rotation)
     override fun touch(serial: String, x: Int, y: Int, pressed: Boolean) = live.touch(serial, x, y, pressed)
@@ -54,7 +54,7 @@ class AdbDeviceDisplay : DeviceDisplay {
         if (device.missingStorage) return null
         val temp = File.createTempFile(".avdbuddy-capture-", ".png", device.directory)
         return try {
-            val process = ProcessBuilder(settings.sdk + "/platform-tools/adb", "-s", serial, "exec-out", "screencap", "-p")
+            val process = processBuilder(listOf(Toolchain(expandPath(settings.sdk)).adb.path, "-s", serial, "exec-out", "screencap", "-p"))
                 .redirectOutput(temp).redirectError(ProcessBuilder.Redirect.DISCARD).start()
             try {
                 if (!process.waitFor(5, TimeUnit.SECONDS)) return null
@@ -69,7 +69,7 @@ class AdbDeviceDisplay : DeviceDisplay {
     }
 
     override fun input(settings: AppSettings, serial: String, arguments: List<String>) {
-        val process = ProcessBuilder(listOf(settings.sdk + "/platform-tools/adb", "-s", serial, "shell", "input") + arguments)
+        val process = processBuilder(listOf(Toolchain(expandPath(settings.sdk)).adb.path, "-s", serial, "shell", "input") + arguments)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
         try { check(process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0) { "Could not send input to the device." } }
         finally { if (process.isAlive) process.destroyForcibly() }

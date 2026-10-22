@@ -11,13 +11,13 @@ internal fun appBundle(javaHome: File = File(System.getProperty("java.home"))): 
     generateSequence(javaHome) { it.parentFile }.firstOrNull { it.extension == "app" }
 
 internal fun updateInstallation(bundle: File?, homebrewReceipt: Boolean): String? = when {
-    bundle == null || bundle.path.contains("/build/") -> "Updates are available in installed builds of AvdBuddy."
+    bundle == null || generateSequence(bundle) { it.parentFile }.any { it.name == "build" } -> "Updates are available in installed builds of AvdBuddy."
     homebrewReceipt -> "Installed with Homebrew. Update with: brew upgrade --cask avdbuddy"
     else -> null
 }
 
 class AppUpdates(private val scope: CoroutineScope) {
-    private val preference = File(System.getProperty("user.home"), "Library/Application Support/AvdBuddy/updates.properties")
+    private val preference = File(HostPlatform().configDirectory, "updates.properties")
     var automatic by mutableStateOf(runCatching { Properties().apply { preference.inputStream().use(::load) }.getProperty("automatic", "true").toBoolean() }.getOrDefault(true)); private set
     var visible by mutableStateOf(false)
     var working by mutableStateOf(false); private set

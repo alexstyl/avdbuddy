@@ -87,7 +87,7 @@ private fun imageFootprint(image: SystemImage): ImageFootprint {
 
 /** SDK Manager's cache is refreshed by --list; use its URL metadata to resolve relative archive URLs. */
 private fun findImageArchive(path: String): ImageArchive? {
-    val cache = File(userHome, ".android/cache")
+    val cache = File(HostPlatform().androidUserHome, "cache")
     val factory = DocumentBuilderFactory.newInstance().apply {
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         setFeature("http://xml.org/sax/features/external-general-entities", false)

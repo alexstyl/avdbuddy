@@ -1,0 +1,23 @@
+schema: 1
+id: pixel-10
+name: Pixel 10
+type: phone
+
+display:
+  width: 1080
+  height: 2424
+  density: 420
+
+# Deliberate emulator defaults, independent of the physical phone's RAM/storage.
+emulator:
+  ramMiB: 4096
+  storageGiB: 16
+
+frame:
+  directory: device-frames/pixel-10
+  # Use the complete bitmap, including the side buttons and bottom edge.
+  width: 1205
+  height: 2535
+  screenX: 59
+  screenY: 55
+  cornerRadius: 87

@@ -27,13 +27,17 @@ class DeviceDisplayTest {
     @Test fun `capture persists a valid screen and failed capture preserves it`() {
         val fake = FakeAndroid(root); val device=fake.device("Preview")
         val png=File(root,"screen.png");ImageIO.write(fixtureScreen(),"png",png)
-        val adb=File(fake.sdk,"platform-tools/adb")
-        adb.writeText("#!/bin/sh\ncat '${png.path}'\n");adb.setExecutable(true)
-        val display=AdbDeviceDisplay()
+        var fail = false
+        val display=AdbDeviceDisplay { arguments ->
+            assertEquals(Toolchain(fake.sdk).adb.path, arguments.first())
+            assertEquals(listOf("-s", "emulator-5554", "exec-out", "screencap", "-p"), arguments.drop(1))
+            val command = if (fail) fixtureCommand("fail") else fixtureCommand("copy", png.path)
+            ProcessBuilder(listOf(command.executable.path) + command.args)
+        }
         val image=display.capture(fake.settings,device,"emulator-5554")!!
         assertEquals(432,image.width)
         assertEquals(image.getRGB(20,20),display.load(device)!!.getRGB(20,20))
-        adb.writeText("#!/bin/sh\nprintf 'not an image'\nexit 1\n")
+        fail = true
         assertNull(display.capture(fake.settings,device,"emulator-5554"))
         assertEquals(image.getRGB(20,20),AdbDeviceDisplay().load(device)!!.getRGB(20,20))
         assertFalse(device.directory.listFiles()!!.any { it.name.startsWith(".avdbuddy-capture-") })

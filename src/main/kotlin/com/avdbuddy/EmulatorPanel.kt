@@ -7,11 +7,11 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
@@ -24,7 +24,8 @@ import androidx.compose.ui.unit.*
 @Composable fun EmulatorPanel(device: Device, state: AppState) {
     val running = device.name in state.running
     val starting = device.name in state.starting && !running
-    if (!running) {
+    val pending = state.pendingCreation?.name == device.name
+    if (!running && !starting && !pending) {
         Column(
             Modifier.fillMaxSize().padding(30.dp).testTag("EmulatorPanel"),
             verticalArrangement = Arrangement.Center,
@@ -50,7 +51,32 @@ import androidx.compose.ui.unit.*
         }
         return
     }
-    val liveFrame = state.frames[device.directory.absolutePath]
+    val liveFrame = if (pending) null else state.frames[device.directory.absolutePath]
+    val displayError = state.displayErrors[device.name]
+    if (pending || starting || liveFrame == null || displayError != null) {
+        Column(
+            Modifier.fillMaxSize().padding(30.dp).testTag("EmulatorPanel"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        ) {
+            Label(device.displayName, modifier = Modifier.testTag("PreviewDeviceName"))
+            when {
+                pending && state.createError.isNotBlank() -> {
+                    Label(state.createError, color = JewelTheme.globalColors.text.error, modifier = Modifier.testTag("CreateError"))
+                    ActionButton("Try again", primary = true, tag = "RetrySetup") { state.retryCreation() }
+                    ActionButton("Remove", tag = "RemoveSetup") { state.discardPendingCreation() }
+                }
+                !pending && displayError != null -> Label(displayError, color = JewelTheme.globalColors.text.error)
+                else -> {
+                    org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(30.dp))
+                    Label(if (pending) if (state.createCancelling) "Cancelling…" else "Setting up…" else "Starting…",
+                        modifier = Modifier.testTag("DeviceSetupStatus"))
+                    if (pending) ActionButton("Cancel", enabled = !state.createCancelling, tag = "CancelSetup") { state.cancelCreate() }
+                }
+            }
+        }
+        return
+    }
     val frameRotation = state.frameRotations[device.directory.absolutePath] ?: 0
     val request = state.rotations[device.name]?.takeIf { it.serial == state.running[device.name] }
     val targetAngle = -(request?.initialRotation ?: frameRotation) * 90f + (request?.turns ?: 0) * 90f
@@ -75,6 +101,20 @@ import androidx.compose.ui.unit.*
     val nativeSize = frame?.let { nativeScreenSize(it.width, it.height, frameRotation) }
     val width = nativeSize?.first ?: device.config["hw.lcd.width"]?.toIntOrNull() ?: if(landscape) 1920 else if(device.type == DeviceType.TABLET) 1600 else 1080
     val height = nativeSize?.second ?: device.config["hw.lcd.height"]?.toIntOrNull() ?: if(landscape) 1080 else if(device.type == DeviceType.TABLET) 2560 else if(device.type == DeviceType.WEAR) 1080 else 2400
+    val hardware = remember(device.config, width, height) {
+        HardwareProfiles.all.firstOrNull { profile ->
+            device.config["showDeviceFrame"] != "no" &&
+                (device.config["avdbuddy.profile"] == profile.id || device.config["hw.device.name"] == profile.id.replace('-', '_')) &&
+                width == profile.display.width && height == profile.display.height
+        }
+    }
+    val artwork = remember(hardware) { hardware?.let { profile ->
+        profileResource("${profile.frame.directory}/back.webp").use {
+            org.jetbrains.skia.Image.makeFromEncoded(it.readBytes()).toComposeImageBitmap()
+        }
+    } }
+    val frameTint = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+
     Column(Modifier.fillMaxSize().testTag("EmulatorPanel")) {
         Row(Modifier.fillMaxWidth().padding(horizontal=24.dp, vertical=18.dp), verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -88,15 +128,20 @@ import androidx.compose.ui.unit.*
             // Keep one physical surface; its scale and touch coordinates never
             // change when it turns. The parent transform maps pointer positions.
             val naturalRatio = width.toFloat() / height.coerceAtLeast(1)
-            val screenWidth = minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*naturalRatio).coerceAtLeast(1.dp)
+            val shell = hardware?.frame
+            val shellWidth = if (shell == null) null else minOf(maxWidth, maxHeight * shell.width / shell.height)
+            val screenWidth = if (shell != null && shellWidth != null) shellWidth * width / shell.width else minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*naturalRatio).coerceAtLeast(1.dp)
             val screenHeight = screenWidth / naturalRatio
             val outerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 34.dp)
-            val innerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 26.dp)
-            Box(Modifier.requiredSize(screenWidth+bezel*2,screenHeight+bezel*2)
+            val innerShape = RoundedCornerShape(if (shell != null) screenWidth * shell.cornerRadius / width else if(device.type == DeviceType.WEAR) 100.dp else 26.dp)
+            val surface = if (shell != null && shellWidth != null) Modifier.requiredSize(shellWidth, shellWidth * shell.height / shell.width)
+                else Modifier.requiredSize(screenWidth+bezel*2,screenHeight+bezel*2)
+            Box(surface
                 .graphicsLayer { rotationZ = angle }
-                .background(Color(0xFF101011), outerShape).border(2.dp, Color(0xFF666366), outerShape)
-                .padding(bezel).testTag("EmulatorBezel")) {
-                Box(Modifier.fillMaxSize().clip(innerShape).background(Color(0xFF202022))
+                .then(if (shell == null) Modifier.background(Color(0xFF101011), outerShape).border(2.dp, Color(0xFF666366), outerShape).padding(bezel) else Modifier)
+                .clipToBounds().testTag("EmulatorBezel")) {
+                val screen = if (shell != null && shellWidth != null) Modifier.offset(shellWidth * shell.screenX / shell.width, shellWidth * shell.screenY / shell.width).size(screenWidth, screenHeight) else Modifier.fillMaxSize()
+                Box(screen.clip(innerShape).background(Color(0xFF202022))
                     .focusRequester(focus).onPreviewKeyEvent { event ->
                         if (!running || rotating || event.type != KeyEventType.KeyDown) false else {
                             val code = when(event.key) { Key.Enter -> "66"; Key.Backspace -> "67"; Key.Escape -> "4"; Key.DirectionLeft -> "21"; Key.DirectionRight -> "22"; Key.DirectionUp -> "19"; Key.DirectionDown -> "20"; else -> null }
@@ -126,7 +171,7 @@ import androidx.compose.ui.unit.*
                             }
                         }
                     }.testTag("LiveDeviceScreen")) {
-                    if(frame != null) Image(frame, "${device.displayName} screen",
+                    Image(frame, "${device.displayName} screen",
                         Modifier.align(Alignment.Center)
                             .requiredSize(
                                 if (frameRotation % 2 == 0) screenWidth else screenHeight,
@@ -135,9 +180,13 @@ import androidx.compose.ui.unit.*
                             // Undo the stream's orientation inside the physical surface.
                             .graphicsLayer { rotationZ = frameRotation * 90f },
                         contentScale=ContentScale.FillBounds)
-                    if(frame == null || state.displayErrors[device.name] != null) {
-                        Label(state.displayErrors[device.name] ?: "Waiting for the device screen…", Modifier.align(Alignment.Center).padding(20.dp))
-                    }
+
+                }
+                // One continuous foreground contains the bezel, rounded aperture and camera.
+                // Paint it over the screen so screen pixels can never cut into the frame.
+                artwork?.let {
+                    Image(it, "${hardware?.name} frame", Modifier.matchParentSize(),
+                        contentScale = ContentScale.FillBounds, colorFilter = frameTint)
                 }
             }
         }

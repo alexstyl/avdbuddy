@@ -14,8 +14,8 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
@@ -41,8 +41,10 @@ fun main(args: Array<String>) {
         println(AndroidService(SettingsStore().load()).diagnostics())
         return
     }
-    System.setProperty("apple.awt.application.name", "AvdBuddy")
-    System.setProperty("apple.awt.application.appearance", "NSAppearanceNameAqua")
+    if (HostOs.detect() == HostOs.MAC) {
+        System.setProperty("apple.awt.application.name", "AvdBuddy")
+        System.setProperty("apple.awt.application.appearance", "NSAppearanceNameAqua")
+    }
     application {
         val scope = rememberCoroutineScope()
         val state = remember { AppState(scope) }
@@ -69,8 +71,8 @@ fun main(args: Array<String>) {
 
 // Handle shortcuts before focused content, including the emulator and text fields.
 private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean {
-    if (event.type != KeyEventType.KeyDown || state.deleteDevices.isNotEmpty()) return false
-    if (event.isMetaPressed) when (event.key) {
+    if (event.type != KeyEventType.KeyDown || state.showCreate || state.deleteDevices.isNotEmpty()) return false
+    if (if (HostOs.detect() == HostOs.MAC) event.isMetaPressed else event.isCtrlPressed) when (event.key) {
         Key.DirectionRight -> return state.rotateCurrent(clockwise = true)
         Key.DirectionLeft -> return state.rotateCurrent(clockwise = false)
     }
@@ -131,8 +133,8 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
     Box(Modifier.fillMaxSize()) {
-    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).focusProperties { canFocus = state.deleteDevices.isEmpty() }
-        .then(if (state.deleteDevices.isNotEmpty()) Modifier.clearAndSetSemantics { } else Modifier).testTag("DeviceShelf")) {
+    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).focusProperties { canFocus = !state.showCreate && state.deleteDevices.isEmpty() }
+        .then(if (state.showCreate || state.deleteDevices.isNotEmpty()) Modifier.clearAndSetSemantics { } else Modifier).testTag("DeviceShelf")) {
         // Extend the sidebar and divider to the window edge, with controls below the traffic lights.
         Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.panelBackground).testTag("DeviceSidebar").padding(top = topInset)) {
             Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -140,7 +142,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 Spacer(Modifier.weight(1f))
                 IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
-            val sidebarDevices = state.devices.sortedWith(
+            val sidebarDevices = state.visibleDevices.sortedWith(
                 compareBy<Device> { it.name !in state.running }
                     .thenBy(String.CASE_INSENSITIVE_ORDER) { it.displayName }
                     .thenBy { it.name }
@@ -182,10 +184,10 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
             }
         }
     }
+    if(state.showCreate) CreateDeviceDialog(state)
     if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
     }
     if(state.showSettings) SettingsWindow(state)
-    if(state.showCreate) CreateWindow(state)
     LaunchedEffect(state, autoRefresh) { if (autoRefresh) state.updates.monitor() }
     if(state.updates.visible) UpdatesWindow(state)
     if(state.showAbout) AboutWindow(state)
@@ -195,7 +197,10 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
 @Composable private fun DeviceRow(device: Device, state: AppState, orderedNames: List<String>) {
     val selected = device.name in state.selected
     val running = device.name in state.running
-    val operation = state.deviceOperations[device.name]
+    val pending = state.pendingCreation?.name == device.name
+    val operation = if (pending) {
+        if (state.creating) "Setting up…" else "Setup failed"
+    } else state.deviceOperations[device.name]
         ?: if (device.name in state.starting) "Starting…" else null
     val subtitle = operation ?: if (device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api)
     var clickModifiers by remember { mutableStateOf(PointerKeyboardModifiers()) }
@@ -208,7 +213,13 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
         val startable = targets.filter { it.name !in state.running && it.name !in state.starting && !it.missingStorage }
         val stoppable = targets.filter { it.name in state.running && it.name !in state.starting }
         buildList {
-            if (!state.busy) {
+            if (pending) {
+                if (state.creating) add(ContextMenuItem("Cancel setup") { state.cancelCreate() })
+                else {
+                    add(ContextMenuItem("Try again") { state.retryCreation() })
+                    add(ContextMenuItem("Remove") { state.discardPendingCreation() })
+                }
+            } else if (!state.busy) {
                 if (startable.isNotEmpty()) add(ContextMenuItem("Start") { state.launch(startable) })
                 if (stoppable.isNotEmpty()) {
                     add(ContextMenuItem("Stop") { state.stop(stoppable) })
@@ -218,7 +229,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                     add(ContextMenuItem("Duplicate") { state.duplicate(device) })
                     add(ContextMenuItem("Rename…") { state.renameDevice = device })
                 }
-                add(ContextMenuItem("Show in Finder") { state.reveal(targets) })
+                add(ContextMenuItem("Show in ${HostPlatform().fileManagerName}") { state.reveal(targets) })
                 if (targets.none { it.name in state.starting }) {
                     add(ContextMenuItem("Remove…") { state.deleteDevices = targets })
                 }
@@ -246,7 +257,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                     Spacer(Modifier.height(4.dp))
                     Label(subtitle, color=JewelTheme.globalColors.text.info, maxLines=1)
                 }
-                if(operation != null) {
+                if(operation != null && (!pending || state.creating)) {
                     Spacer(Modifier.width(10.dp))
                     org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))
                 }

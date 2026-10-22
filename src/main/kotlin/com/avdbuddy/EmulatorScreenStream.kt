@@ -50,11 +50,7 @@ internal class EmulatorEndpoint(val port: Int, val token: String) {
     }
 }
 
-private fun discoveryDirectories(): List<File> = when {
-    System.getProperty("os.name").contains("Mac") -> listOf(File(userHome, "Library/Caches/TemporaryItems/avd/running"))
-    System.getProperty("os.name").startsWith("Windows") -> listOf(File(System.getenv("LOCALAPPDATA") ?: userHome.path, "Temp/avd/running"))
-    else -> listOfNotNull(System.getenv("XDG_RUNTIME_DIR")?.let { File(it, "avd/running") }, File(userHome, ".android/avd/running"))
-}
+private fun discoveryDirectories(): List<File> = HostPlatform().discoveryDirectories
 
 internal val screenshotStreamMethod: MethodDescriptor<ImageFormat, Image> = MethodDescriptor.newBuilder<ImageFormat, Image>()
     .setType(MethodDescriptor.MethodType.SERVER_STREAMING)
