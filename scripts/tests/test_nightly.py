@@ -50,6 +50,20 @@ class NightlyArtifactsTest(unittest.TestCase):
             (root / "AvdBuddy-Nightly-duplicate-mac-arm64.dmg").touch()
             with self.assertRaises(ValueError): nightly.release_assets(root)
 
+    def test_release_accepts_actual_ci_filenames_and_x64_architecture_aliases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ["AvdBuddy-Nightly-nightly.4050744-mac-arm64.dmg",
+                         "AvdBuddy-Nightly-nightly.4050744-mac-x64.dmg",
+                         "AvdBuddy-Nightly-nightly.4050744-win-x64-nsis.exe"]:
+                (root / name).touch()
+            for arch in ["x86_64", "x64", "amd64"]:
+                with self.subTest(arch=arch):
+                    appimage = root / f"AvdBuddy-Nightly-nightly.4050744-linux-{arch}.AppImage"
+                    appimage.touch()
+                    self.assertEqual(4, len(nightly.release_assets(root)))
+                    appimage.unlink()
+
     def test_publisher_cannot_use_a_stable_tag(self):
         with self.assertRaises(ValueError): nightly.publish("unused", "v1.0.0", "commit", "owner/repo")
 

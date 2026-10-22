@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -76,11 +77,21 @@ def release_assets(directory):
     # Require both macOS architectures and all three desktop operating systems.
     expected = {("mac", "arm64", ".dmg"), ("mac", "x64", ".dmg"),
                 ("win", "x64", ".exe"), ("linux", "x64", ".AppImage")}
-    if len(files) != len(expected):
-        raise ValueError("A nightly release must contain exactly four installers, one per platform/architecture")
-    for platform, arch, extension in expected:
-        if sum(f"-{platform}-{arch}" in p.name and p.suffix == extension for p in files) != 1:
-            raise ValueError(f"Missing {platform}/{arch} {extension} installer")
+    targets = []
+    for file in files:
+        match = re.fullmatch(
+            r"AvdBuddy-Nightly-.+-(mac|win|linux)-(arm64|x64|x86_64|amd64)(?:-nsis)?(\.dmg|\.exe|\.AppImage)",
+            file.name,
+        )
+        if not match:
+            raise ValueError(f"Unexpected nightly installer filename: {file.name}")
+        platform, arch, extension = match.groups()
+        # electron-builder uses x86_64 for AppImage, amd64 for Debian, and x64
+        # for Windows/macOS. These are the same CPU architecture.
+        arch = "x64" if arch in {"x86_64", "amd64"} else arch
+        targets.append((platform, arch, extension))
+    if len(targets) != len(expected) or set(targets) != expected:
+        raise ValueError(f"Expected exactly four installers, one per platform/architecture; missing: {expected - set(targets)}")
     return files
 
 
