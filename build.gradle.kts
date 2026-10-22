@@ -59,9 +59,10 @@ nucleus {
         }
         nativeDistributions {
             targetFormats(*when {
+                nightlyBuild && System.getProperty("os.name").startsWith("Mac") -> arrayOf(TargetFormat.Dmg)
+                nightlyBuild && System.getProperty("os.name").startsWith("Windows") -> arrayOf(TargetFormat.Nsis)
+                nightlyBuild -> arrayOf(TargetFormat.AppImage)
                 System.getProperty("os.name").startsWith("Mac") -> arrayOf(TargetFormat.Dmg, TargetFormat.Zip)
-                nightlyBuild && System.getProperty("os.name").startsWith("Windows") -> arrayOf(TargetFormat.Nsis, TargetFormat.Zip)
-                nightlyBuild -> arrayOf(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Zip)
                 else -> arrayOf(TargetFormat.Zip)
             })
             packageName = if (nightlyBuild) "AvdBuddy-Nightly" else "AvdBuddy"

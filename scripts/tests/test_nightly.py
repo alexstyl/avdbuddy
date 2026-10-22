@@ -17,20 +17,37 @@ class NightlyArtifactsTest(unittest.TestCase):
                                  ("dmg", "latest-mac.yml"), ("zip", "appcast.xml")]:
                 (root / folder).mkdir(exist_ok=True)
                 (root / folder / name).write_text("fixture")
-            self.assertEqual({".dmg", ".zip"}, {p.suffix for p in nightly.installer_files(root, "macos")})
-            (root / "zip" / "AvdBuddy-Nightly-old-mac-arm64.zip").touch()
+            self.assertEqual({".dmg"}, {p.suffix for p in nightly.installer_files(root, "macos")})
+            (root / "dmg" / "AvdBuddy-Nightly-old-mac-arm64.dmg").touch()
             with self.assertRaises(ValueError): nightly.installer_files(root, "macos")
 
     def test_publish_requires_all_platforms_and_rejects_stable_update_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for target in ["mac-arm64.dmg", "mac-x64.dmg", "win-x64.exe", "linux-x64.AppImage", "linux-x64.deb"]:
+            for target in ["mac-arm64.dmg", "mac-x64.dmg", "win-x64.exe", "linux-x64.AppImage"]:
                 (root / f"AvdBuddy-Nightly-test-{target}").touch()
-            self.assertEqual(5, len(nightly.release_assets(root)))
+            self.assertEqual(4, len(nightly.release_assets(root)))
             (root / "latest-mac.yml").touch()
             with self.assertRaises(ValueError): nightly.release_assets(root)
             (root / "latest-mac.yml").unlink()
             (root / "AvdBuddy-Nightly-test-win-x64.exe").unlink()
+            with self.assertRaises(ValueError): nightly.release_assets(root)
+
+    def test_publish_rejects_extra_or_duplicate_installers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            targets = ["mac-arm64.dmg", "mac-x64.dmg", "win-x64-nsis.exe", "linux-x64.AppImage"]
+            for target in targets:
+                (root / f"AvdBuddy-Nightly-test-{target}").touch()
+            for extra in ["mac-arm64.zip", "linux-x64.deb", "mac-arm64.dmg"]:
+                with self.subTest(extra=extra):
+                    file = root / f"AvdBuddy-Nightly-extra-{extra}"
+                    file.touch()
+                    with self.assertRaises(ValueError): nightly.release_assets(root)
+                    file.unlink()
+            # Four files still fail if two target the same architecture.
+            (root / "AvdBuddy-Nightly-test-mac-x64.dmg").unlink()
+            (root / "AvdBuddy-Nightly-duplicate-mac-arm64.dmg").touch()
             with self.assertRaises(ValueError): nightly.release_assets(root)
 
     def test_publisher_cannot_use_a_stable_tag(self):

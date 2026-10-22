@@ -10,7 +10,7 @@ import subprocess
 import sys
 import zipfile
 
-FORMATS = {"macos": {".dmg", ".zip"}, "windows": {".exe", ".zip"}, "linux": {".deb", ".AppImage", ".zip"}}
+FORMATS = {"macos": {".dmg"}, "windows": {".exe"}, "linux": {".AppImage"}}
 
 
 def installer_files(root, platform):
@@ -75,9 +75,11 @@ def release_assets(directory):
         raise ValueError("Release assets must contain only nightly installers; update feeds are forbidden")
     # Require both macOS architectures and all three desktop operating systems.
     expected = {("mac", "arm64", ".dmg"), ("mac", "x64", ".dmg"),
-                ("win", "x64", ".exe"), ("linux", "x64", ".AppImage"), ("linux", "x64", ".deb")}
+                ("win", "x64", ".exe"), ("linux", "x64", ".AppImage")}
+    if len(files) != len(expected):
+        raise ValueError("A nightly release must contain exactly four installers, one per platform/architecture")
     for platform, arch, extension in expected:
-        if not any(f"-{platform}-{arch}" in p.name and p.suffix == extension for p in files):
+        if sum(f"-{platform}-{arch}" in p.name and p.suffix == extension for p in files) != 1:
             raise ValueError(f"Missing {platform}/{arch} {extension} installer")
     return files
 
@@ -92,8 +94,8 @@ def publish(directory, tag, commit, repo):
     notes.write_text(f"""Nightly build from `{commit}`. Experimental, manually installed builds with bundled Java.
 
 - macOS: download the DMG for Apple Silicon (`arm64`) or Intel (`x64`) and drag AvdBuddy-Nightly to Applications.
-- Windows x64: run the `.exe` installer. ZIP archives are also available.
-- Linux x64: install the `.deb`, or make the `.AppImage` executable and run it (FUSE may be required).
+- Windows x64: run the `.exe` installer.
+- Linux x64: make the `.AppImage` executable and run it (FUSE may be required).
 
 These builds are unsigned; macOS Gatekeeper or Windows SmartScreen may require manual approval.
 Install a host Android SDK with command-line tools, emulator, and platform-tools separately.

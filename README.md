@@ -174,8 +174,8 @@ Nightly app versions and download filenames use `nightly.<7-character commit SHA
 so repeated builds of the same commit have separate releases.
 
 Each successful nightly publishes a dated GitHub **prerelease** with installers
-for macOS Apple Silicon and Intel (DMG + ZIP), Windows x64 (installer EXE + ZIP),
-and Linux x64 (DEB + AppImage + ZIP). Java is bundled; an Android SDK is still
+for macOS Apple Silicon and Intel (one DMG each), Windows x64 (one installer EXE),
+and Linux x64 (one AppImage): exactly four installers. Java is bundled; an Android SDK is still
 required. Download from [GitHub Releases](https://github.com/alexstyl/avdbuddy/releases).
 The release notes include installation instructions and SHA-256 checksums.
 These are unsigned development builds; macOS Gatekeeper or Windows SmartScreen
