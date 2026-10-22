@@ -1,6 +1,9 @@
 name: Platform checks
 
 on:
+  schedule:
+    # Nightly at 02:23 Asia/Bangkok (19:23 UTC).
+    - cron: '23 19 * * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -42,10 +45,10 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Build and run headless checks
         if: runner.os != 'Windows'
-        run: ./gradlew --no-daemon --console=plain check assemble platformDiagnostics
+        run: ./gradlew --no-daemon --console=plain test --rerun check assemble platformDiagnostics
       - name: Build and run headless checks (Windows)
         if: runner.os == 'Windows'
-        run: .\gradlew.bat --no-daemon --console=plain check assemble platformDiagnostics
+        run: .\gradlew.bat --no-daemon --console=plain test --rerun check assemble platformDiagnostics
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

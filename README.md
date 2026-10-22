@@ -119,9 +119,12 @@ required. Existing devices keep their configurations.
 
 Windows equivalent: `.\gradlew.bat test`.
 
-The **Platform checks** GitHub Actions workflow runs only through
-`workflow_dispatch`: Actions → Platform checks → Run workflow. Select a branch,
-or optionally enter a branch, tag, or commit in the `ref` field. CLI equivalent:
+The **Platform checks** GitHub Actions workflow runs nightly against the latest
+`main` at 02:23 Asia/Bangkok (19:23 UTC). Every run forces the headless test task
+to execute, even when Gradle has cached results from an earlier run.
+
+You can also run it manually: Actions → Platform checks → Run workflow. Select a
+branch, or optionally enter a branch, tag, or commit in the `ref` field. CLI equivalent:
 
 ```bash
 gh workflow run platform-checks.yml -f ref=YOUR_BRANCH
