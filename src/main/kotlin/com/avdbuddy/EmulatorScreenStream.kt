@@ -6,6 +6,8 @@ import com.avdbuddy.emulator.protocol.Image
 import com.avdbuddy.emulator.protocol.ImageFormat
 import com.avdbuddy.emulator.protocol.Touch
 import com.avdbuddy.emulator.protocol.TouchEvent
+import com.avdbuddy.emulator.protocol.ParameterValue
+import com.avdbuddy.emulator.protocol.PhysicalModelValue
 import com.google.protobuf.Empty
 import io.grpc.ManagedChannel
 import io.grpc.CallOptions
@@ -68,9 +70,35 @@ internal val touchMethod: MethodDescriptor<TouchEvent, Empty> = MethodDescriptor
     .setResponseMarshaller(ProtoUtils.marshaller(Empty.getDefaultInstance()))
     .build()
 
+internal val physicalModelMethod: MethodDescriptor<PhysicalModelValue, Empty> = MethodDescriptor.newBuilder<PhysicalModelValue, Empty>()
+    .setType(MethodDescriptor.MethodType.UNARY)
+    .setFullMethodName("android.emulation.control.EmulatorController/setPhysicalModel")
+    .setRequestMarshaller(ProtoUtils.marshaller(PhysicalModelValue.getDefaultInstance()))
+    .setResponseMarshaller(ProtoUtils.marshaller(Empty.getDefaultInstance()))
+    .build()
+
 internal class EmulatorScreenStream(private val discover: (String) -> EmulatorEndpoint? = { EmulatorEndpoint.discover(it) }) {
     private val connections = ConcurrentHashMap<String, ManagedChannel>()
     private val heldTouches = ConcurrentHashMap<String, Pair<Int, Int>>()
+
+    fun rotate(serial: String, rotation: Int) {
+        val channel = connections[serial] ?: error("The live screen is reconnecting. Try rotating again in a moment.")
+        // Match the emulator's coarse orientation poses, including its 30-degree
+        // tilt. Screenshot orientation follows this physical model, not wm's lock.
+        val pose = when (rotation) {
+            0 -> listOf(-30f, 0f, 0f)
+            1 -> listOf(0f, 30f, 90f)
+            2 -> listOf(30f, 0f, 180f)
+            3 -> listOf(0f, -30f, -90f)
+            else -> error("Invalid device rotation: $rotation")
+        }
+        val request = PhysicalModelValue.newBuilder()
+            .setTarget(PhysicalModelValue.PhysicalType.ROTATION)
+            .setValue(ParameterValue.newBuilder().addAllData(pose))
+            .setInterpolation(PhysicalModelValue.Interpolation.STEP).build()
+        ClientCalls.blockingUnaryCall(channel, physicalModelMethod,
+            CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS), request)
+    }
 
     fun touch(serial: String, x: Int, y: Int, pressed: Boolean) {
         val channel = connections[serial] ?: return
@@ -83,7 +111,7 @@ internal class EmulatorScreenStream(private val discover: (String) -> EmulatorEn
         ClientCalls.blockingUnaryCall(channel, touchMethod, CallOptions.DEFAULT.withDeadlineAfter(timeoutMs, TimeUnit.MILLISECONDS), event)
     }
 
-    fun frames(device: Device, serial: String): Flow<ImageBitmap> = callbackFlow {
+    fun frames(device: Device, serial: String): Flow<EmulatorFrame> = callbackFlow {
         val endpoint = discover(serial)
             ?: error("Restart ${device.displayName} in AvdBuddy to connect the live screen.")
         val headers = Metadata().apply {
@@ -109,7 +137,9 @@ internal class EmulatorScreenStream(private val discover: (String) -> EmulatorEn
             call.cancel("Preview closed", null)
             channel.shutdownNow()
         }
-    }.buffer(Channel.CONFLATED).mapNotNull(::decodeEmulatorFrame).flowOn(Dispatchers.IO)
+    }.buffer(Channel.CONFLATED).mapNotNull { frame ->
+        decodeEmulatorFrame(frame)?.let { EmulatorFrame(it, frame.format.rotation.rotationValue) }
+    }.flowOn(Dispatchers.IO)
 }
 
 // Raw pixels go straight to Skia: no PNG encoder/decoder, subprocess or disk access per frame.

@@ -1,5 +1,7 @@
 package com.avdbuddy
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -9,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.focus.FocusRequester
@@ -24,12 +27,31 @@ import com.composeunstyled.UnstyledButton
 @Composable fun EmulatorPanel(device: Device, state: AppState) {
     val running = device.name in state.running
     val starting = device.name in state.starting && !running
-    val frame = state.frames[device.directory.absolutePath]
+    val liveFrame = state.frames[device.directory.absolutePath]
+    val frameRotation = state.frameRotations[device.directory.absolutePath] ?: 0
+    val request = state.rotations[device.name]?.takeIf { it.serial == state.running[device.name] }
+    val targetAngle = -(request?.initialRotation ?: frameRotation) * 90f + (request?.turns ?: 0) * 90f
+    val rotation = remember(device.name, state.running[device.name]) {
+        Animatable(targetAngle)
+    }
+    LaunchedEffect(rotation, targetAngle) {
+        // Cancellation preserves the current angle. Drop old momentum so a
+        // direction change responds immediately instead of continuing the old turn.
+        rotation.animateTo(
+            targetValue = targetAngle,
+            animationSpec = spring(dampingRatio = .75f, stiffness = 700f),
+            initialVelocity = 0f,
+        )
+    }
+    val angle = rotation.value
+    val rotating = kotlin.math.abs(angle - targetAngle) > .1f
+    val frame = liveFrame
     val focus = remember(device.name) { FocusRequester() }
     val landscape = device.type in listOf(DeviceType.TV, DeviceType.CAR, DeviceType.DESKTOP)
-    val width = frame?.width ?: device.config["hw.lcd.width"]?.toIntOrNull() ?: if(landscape) 1920 else if(device.type == DeviceType.TABLET) 1600 else 1080
-    val height = frame?.height ?: device.config["hw.lcd.height"]?.toIntOrNull() ?: if(landscape) 1080 else if(device.type == DeviceType.TABLET) 2560 else if(device.type == DeviceType.WEAR) 1080 else 2400
-    val ratio = width.toFloat() / height.coerceAtLeast(1)
+    // The touch protocol addresses the unrotated physical framebuffer.
+    val nativeSize = frame?.let { nativeScreenSize(it.width, it.height, frameRotation) }
+    val width = nativeSize?.first ?: device.config["hw.lcd.width"]?.toIntOrNull() ?: if(landscape) 1920 else if(device.type == DeviceType.TABLET) 1600 else 1080
+    val height = nativeSize?.second ?: device.config["hw.lcd.height"]?.toIntOrNull() ?: if(landscape) 1080 else if(device.type == DeviceType.TABLET) 2560 else if(device.type == DeviceType.WEAR) 1080 else 2400
     Column(Modifier.fillMaxSize().testTag("EmulatorPanel")) {
         Row(Modifier.fillMaxWidth().padding(horizontal=24.dp, vertical=18.dp), verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -39,18 +61,22 @@ import com.composeunstyled.UnstyledButton
             }
             if(running) ActionButton("Stop", enabled=!state.busy, tag="Stop-${device.name}") { state.stop(device) }
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
             val bezel = 9.dp
-            val screenWidth = minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*ratio).coerceAtLeast(1.dp)
-            val screenHeight = screenWidth/ratio
+            // Keep one physical surface; its scale and touch coordinates never
+            // change when it turns. The parent transform maps pointer positions.
+            val naturalRatio = width.toFloat() / height.coerceAtLeast(1)
+            val screenWidth = minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*naturalRatio).coerceAtLeast(1.dp)
+            val screenHeight = screenWidth / naturalRatio
             val outerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 34.dp)
             val innerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 26.dp)
-            Box(Modifier.size(screenWidth+bezel*2,screenHeight+bezel*2)
+            Box(Modifier.requiredSize(screenWidth+bezel*2,screenHeight+bezel*2)
+                .graphicsLayer { rotationZ = angle }
                 .background(Color(0xFF101011), outerShape).border(2.dp, Color(0xFF666366), outerShape)
                 .padding(bezel).testTag("EmulatorBezel")) {
                 Box(Modifier.fillMaxSize().clip(innerShape).background(Color(0xFF202022))
                     .focusRequester(focus).onPreviewKeyEvent { event ->
-                        if (!running || event.type != KeyEventType.KeyDown) false else {
+                        if (!running || rotating || event.type != KeyEventType.KeyDown) false else {
                             val code = when(event.key) { Key.Enter -> "66"; Key.Backspace -> "67"; Key.Escape -> "4"; Key.DirectionLeft -> "21"; Key.DirectionRight -> "22"; Key.DirectionUp -> "19"; Key.DirectionDown -> "20"; else -> null }
                             if(code != null) { state.sendInput(device, listOf("keyevent",code)); true }
                             else {
@@ -60,8 +86,8 @@ import com.composeunstyled.UnstyledButton
                                 } else false
                             }
                         }
-                    }.focusable().pointerInput(device.name, running, width, height) {
-                        if(running) awaitEachGesture {
+                    }.focusable().pointerInput(device.name, running, rotating, width, height) {
+                        if(running && !rotating) awaitEachGesture {
                             val down = awaitFirstDown(); focus.requestFocus(); down.consume()
                             var last = screenPoint(down.position.x, down.position.y, size.width, size.height, width, height)
                             state.sendTouch(device, last.first, last.second, true)
@@ -78,7 +104,15 @@ import com.composeunstyled.UnstyledButton
                             }
                         }
                     }.testTag(if(running) "LiveDeviceScreen" else "StoppedDeviceScreen")) {
-                    if(frame != null) Image(frame, "${device.displayName} screen", Modifier.fillMaxSize(), contentScale=ContentScale.FillBounds,
+                    if(frame != null) Image(frame, "${device.displayName} screen",
+                        Modifier.align(Alignment.Center)
+                            .requiredSize(
+                                if (frameRotation % 2 == 0) screenWidth else screenHeight,
+                                if (frameRotation % 2 == 0) screenHeight else screenWidth,
+                            )
+                            // Undo the stream's orientation inside the physical surface.
+                            .graphicsLayer { rotationZ = frameRotation * 90f },
+                        contentScale=ContentScale.FillBounds,
                         colorFilter=if(running) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }))
                     if(!running) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.30f)))

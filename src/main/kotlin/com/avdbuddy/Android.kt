@@ -201,6 +201,11 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         }
         return result
     }
+    fun displayRotation(serial: String): Int {
+        val dump = command(toolchain.adb, listOf("-s", serial, "shell", "dumpsys", "input"))
+        return inputDisplayRotation(dump)
+            ?: error("Could not read the device orientation. Try rotating again once Android has started.")
+    }
     fun launch(device: Device) {
         toolchain.requireReady(); requireAvdStorage()
         require(!device.missingStorage) { "${device.displayName} has unavailable storage. Connect its drive before launching." }
@@ -299,4 +304,9 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         appendLine("Devices: ${devices().joinToString { it.name }}")
     }
 }
+
+internal fun inputDisplayRotation(dump: String): Int? =
+    Regex("Viewport INTERNAL: displayId=0,.*?orientation=([0-3])(?:,|\\s)")
+        .find(dump)?.groupValues?.get(1)?.toInt()
+        ?: Regex("SurfaceOrientation: ([0-3])").find(dump)?.groupValues?.get(1)?.toInt()
 fun formatSize(bytes: Long): String = when { bytes > 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes > 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "${bytes / 1000} KB" }

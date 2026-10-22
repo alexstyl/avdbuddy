@@ -348,6 +348,7 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
             Label("Press Play to start it. A gray screen is the last captured preview; the running screen appears in color.",size=12)
             Label("Use Settings to reconnect an unavailable SDK or device folder. Changing folders leaves existing devices in place.",size=12)
             Label("Shortcuts: ⌘N creates a device. ⌘, opens Settings. ⌘⌫ asks to delete the selected device.",size=11,color=Palette.muted)
+            Label("While running: ⌘→ rotates clockwise. ⌘← rotates counterclockwise.",size=11,color=Palette.muted)
         }
         ActionButton("Copy diagnostics",tag="CopyDiagnostics"){state.copyDiagnostics()}
         Label("By Alex Styl · Inspired by VirtualBuddy",color=Palette.muted,size=12)

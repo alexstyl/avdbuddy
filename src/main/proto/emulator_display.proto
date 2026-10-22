@@ -19,12 +19,33 @@ message TouchEvent {
   int32 display = 2;
 }
 
+message ParameterValue {
+  repeated float data = 1 [packed = true];
+}
+
+message PhysicalModelValue {
+  enum PhysicalType { POSITION = 0; ROTATION = 1; }
+  PhysicalType target = 1;
+  ParameterValue value = 3;
+  enum Interpolation { SMOOTH = 0; STEP = 1; }
+  Interpolation interpolation = 4;
+}
+
 message ImageFormat {
   enum ImgFormat { PNG = 0; RGBA8888 = 1; RGB888 = 2; }
   ImgFormat format = 1;
+  Rotation rotation = 2;
   uint32 width = 3;
   uint32 height = 4;
   uint32 display = 5;
+}
+
+message Rotation {
+  enum SkinRotation { PORTRAIT = 0; LANDSCAPE = 1; REVERSE_PORTRAIT = 2; REVERSE_LANDSCAPE = 3; }
+  SkinRotation rotation = 1;
+  double xAxis = 2;
+  double yAxis = 3;
+  double zAxis = 4;
 }
 
 message Image {

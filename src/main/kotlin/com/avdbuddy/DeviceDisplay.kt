@@ -15,23 +15,27 @@ import java.nio.file.StandardCopyOption.*
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
+data class EmulatorFrame(val bitmap: ImageBitmap, val rotation: Int)
+
 /** The capture is a preview; Android's Quick Boot snapshot owns the resumable device state. */
 interface DeviceDisplay {
     fun load(device: Device): BufferedImage?
     fun capture(settings: AppSettings, device: Device, serial: String): BufferedImage?
-    fun stream(settings: AppSettings, device: Device, serial: String): Flow<ImageBitmap>
+    fun stream(settings: AppSettings, device: Device, serial: String): Flow<EmulatorFrame>
     fun touch(serial: String, x: Int, y: Int, pressed: Boolean)
     fun input(settings: AppSettings, serial: String, arguments: List<String>)
+    fun rotate(serial: String, rotation: Int)
 }
 
 class AdbDeviceDisplay : DeviceDisplay {
     private val live = EmulatorScreenStream()
+    override fun rotate(serial: String, rotation: Int) = live.rotate(serial, rotation)
     override fun touch(serial: String, x: Int, y: Int, pressed: Boolean) = live.touch(serial, x, y, pressed)
 
-    override fun stream(settings: AppSettings, device: Device, serial: String): Flow<ImageBitmap> = flow {
+    override fun stream(settings: AppSettings, device: Device, serial: String): Flow<EmulatorFrame> = flow {
         var last: ImageBitmap? = null
         try {
-            live.frames(device, serial).collect { last = it; emit(it) }
+            live.frames(device, serial).collect { last = it.bitmap; emit(it) }
         } finally {
             // Save once when leaving the live view, never on the per-frame path.
             withContext(NonCancellable + Dispatchers.IO) {
@@ -84,3 +88,6 @@ class AdbDeviceDisplay : DeviceDisplay {
 internal fun screenPoint(x: Float, y: Float, viewWidth: Int, viewHeight: Int, imageWidth: Int, imageHeight: Int): Pair<Int, Int> =
     ((x / viewWidth.coerceAtLeast(1) * imageWidth).toInt().coerceIn(0, imageWidth - 1)) to
         ((y / viewHeight.coerceAtLeast(1) * imageHeight).toInt().coerceIn(0, imageHeight - 1))
+
+internal fun nativeScreenSize(imageWidth: Int, imageHeight: Int, rotation: Int): Pair<Int, Int> =
+    if (rotation % 2 == 0) imageWidth to imageHeight else imageHeight to imageWidth

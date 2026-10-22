@@ -43,6 +43,16 @@ class DeviceDisplayTest {
         assertEquals(1079 to 0,screenPoint(400f,-10f,300,600,1080,2400))
         assertEquals(960 to 540,screenPoint(200f,100f,400,200,1920,1080))
     }
+    @Test fun `all streamed orientations address the same natural touch surface`() {
+        for (rotation in 0..3) {
+            val imageWidth = if (rotation % 2 == 0) 1080 else 2424
+            val imageHeight = if (rotation % 2 == 0) 2424 else 1080
+            val (width, height) = nativeScreenSize(imageWidth, imageHeight, rotation)
+            assertEquals(1080 to 2424, width to height)
+            assertEquals(270 to 1818, screenPoint(75f, 450f, 300, 600, width, height))
+            assertEquals(1079 to 2423, screenPoint(300f, 600f, 300, 600, width, height))
+        }
+    }
     @Test fun `launch uses a headless emulator and keeps Quick Boot enabled`() {
         val fake=FakeAndroid(root); val device=fake.device("Preview")
         AndroidService(fake.settings,fake).launch(device)

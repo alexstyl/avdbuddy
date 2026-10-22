@@ -3,6 +3,8 @@ package com.avdbuddy
 import com.avdbuddy.emulator.protocol.Image
 import com.avdbuddy.emulator.protocol.ImageFormat
 import com.avdbuddy.emulator.protocol.TouchEvent
+import com.avdbuddy.emulator.protocol.PhysicalModelValue
+import com.avdbuddy.emulator.protocol.Rotation
 import com.google.protobuf.ByteString
 import com.google.protobuf.Empty
 import io.grpc.Metadata
@@ -59,15 +61,22 @@ class EmulatorScreenStreamTest {
         val cancelled = CompletableFuture<Boolean>()
         val released = CompletableFuture<Boolean>()
         val touches = java.util.Collections.synchronizedList(mutableListOf<TouchEvent>())
+        val poses = java.util.Collections.synchronizedList(mutableListOf<PhysicalModelValue>())
         val service = ServerServiceDefinition.builder("android.emulation.control.EmulatorController")
             .addMethod(screenshotStreamMethod, ServerCalls.asyncServerStreamingCall<ImageFormat, Image> { request, observer ->
                 assertEquals(ImageFormat.ImgFormat.RGBA8888, request.format)
                 (observer as ServerCallStreamObserver<Image>).setOnCancelHandler { cancelled.complete(true) }
-                observer.onNext(frame())
+                observer.onNext(frame().toBuilder().setFormat(frame().format.toBuilder()
+                    .setRotation(Rotation.newBuilder().setRotation(Rotation.SkinRotation.REVERSE_LANDSCAPE))).build())
             })
             .addMethod(touchMethod, ServerCalls.asyncUnaryCall<TouchEvent, Empty> { request, observer ->
                 touches.add(request)
                 if (request.touchesList.single().pressure == 0) released.complete(true)
+                observer.onNext(Empty.getDefaultInstance())
+                observer.onCompleted()
+            })
+            .addMethod(physicalModelMethod, ServerCalls.asyncUnaryCall<PhysicalModelValue, Empty> { request, observer ->
+                poses.add(request)
                 observer.onNext(Empty.getDefaultInstance())
                 observer.onCompleted()
             }).build()
@@ -82,12 +91,20 @@ class EmulatorScreenStreamTest {
         try {
             val device = FakeAndroid(root).device("Stream")
             val stream = EmulatorScreenStream { EmulatorEndpoint(server.port, "test-token") }
-            val firstFrame = CompletableDeferred<androidx.compose.ui.graphics.ImageBitmap>()
+            val firstFrame = CompletableDeferred<EmulatorFrame>()
             val collection = launch { stream.frames(device, "emulator-5554").collect { firstFrame.complete(it) } }
             try {
-                assertEquals(2, withTimeout(5000) { firstFrame.await() }.width)
+                assertEquals(2, withTimeout(5000) { firstFrame.await() }.bitmap.width)
+                assertEquals(3, firstFrame.await().rotation)
                 assertEquals("Bearer test-token", receivedHeaders.get(5, TimeUnit.SECONDS))
                 withContext(Dispatchers.IO) { stream.touch("emulator-5554", 123, 456, true) }
+                withContext(Dispatchers.IO) { for (rotation in 0..3) stream.rotate("emulator-5554", rotation) }
+                assertEquals(listOf(
+                    listOf(-30f, 0f, 0f), listOf(0f, 30f, 90f),
+                    listOf(30f, 0f, 180f), listOf(0f, -30f, -90f),
+                ), poses.map { it.value.dataList })
+                assertTrue(poses.all { it.target == PhysicalModelValue.PhysicalType.ROTATION &&
+                    it.interpolation == PhysicalModelValue.Interpolation.STEP })
             } finally { collection.cancelAndJoin() }
             assertTrue(cancelled.get(5, TimeUnit.SECONDS))
             assertTrue(released.get(5, TimeUnit.SECONDS))

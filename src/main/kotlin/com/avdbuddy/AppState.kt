@@ -29,6 +29,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     var previewName by mutableStateOf<String?>(null)
     val previewDevice get() = devices.firstOrNull { it.name == previewName } ?: selectedDevices.firstOrNull() ?: devices.firstOrNull()
     val frames = mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
+    val frameRotations = mutableStateMapOf<String, Int>()
     val displayErrors = mutableStateMapOf<String, String>()
     var starting by mutableStateOf(setOf<String>()); private set
     fun selectPreview(device: Device) { previewName = device.name; selected = setOf(device.name) }
@@ -38,6 +39,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             snapshotFlow { devices.map { it.directory.absolutePath } }.collect { paths ->
                 loaded.retainAll(paths.toSet())
                 frames.keys.retainAll(paths.toSet())
+                frameRotations.keys.retainAll(paths.toSet())
                 devices.forEach { device ->
                     val key = device.directory.absolutePath
                     if (loaded.add(key)) {
@@ -55,8 +57,9 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             if (serial == null) return@collectLatest
             while (isActive) {
                 try {
-                    display.stream(currentSettings, device, serial).collect { image ->
-                        frames[device.directory.absolutePath] = image
+                    display.stream(currentSettings, device, serial).collect { frame ->
+                        frames[device.directory.absolutePath] = frame.bitmap
+                        frameRotations[device.directory.absolutePath] = frame.rotation
                         displayErrors.remove(device.name)
                     }
                 } catch (e: Exception) {
@@ -68,6 +71,52 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         }
     }
     private val inputMutex = Mutex()
+    val rotations = mutableStateMapOf<String, EmulatorRotation>()
+    private val rotationJobs = mutableMapOf<String, Job>()
+    private val rotationBases = mutableMapOf<String, Int>()
+    private val appliedRotations = mutableMapOf<String, EmulatorRotation>()
+    fun rotateCurrent(clockwise: Boolean): Boolean {
+        val device = previewDevice ?: return false
+        val serial = running[device.name] ?: return false
+        val previous = rotations[device.name]?.takeIf { it.serial == serial }
+        if (previous == null) rotationJobs.remove(device.name)?.cancel()
+        // Publish before doing any IO so every press immediately retargets the preview.
+        rotations[device.name] = EmulatorRotation(
+            turns = (previous?.turns ?: 0) + if (clockwise) 1 else -1,
+            initialRotation = previous?.initialRotation ?: frameRotations[device.directory.absolutePath],
+            serial = serial,
+        )
+        if (rotationJobs[device.name]?.isActive == true) return true
+        val backend = service
+        rotationJobs[device.name] = scope.launch {
+            try {
+                val base = rotationBases[serial] ?: (
+                    rotations[device.name]?.initialRotation ?: withContext(Dispatchers.IO) {
+                        backend.displayRotation(serial)
+                    }
+                ).also { rotationBases[serial] = it }
+                while (running[device.name] == serial) {
+                    val latest = rotations[device.name]?.takeIf { it.serial == serial } ?: break
+                    val applied = appliedRotations[device.name]?.takeIf { it.serial == serial }
+                    if (latest.turns == (applied?.turns ?: 0)) break
+                    val target = Math.floorMod(base - latest.turns, 4)
+                    withContext(Dispatchers.IO) {
+                        display.rotate(serial, target)
+                    }
+                    appliedRotations[device.name] = latest
+                    // Re-read the latest target instead of queuing intermediate keypresses.
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                if (rotations[device.name]?.serial == serial) {
+                    val applied = appliedRotations[device.name]?.takeIf { it.serial == serial }
+                    if (applied == null) rotations.remove(device.name) else rotations[device.name] = applied
+                }
+                report(e)
+            }
+        }
+        return true
+    }
     fun sendTouch(device: Device, x: Int, y: Int, pressed: Boolean) {
         val serial = running[device.name] ?: return
         scope.launch {
@@ -116,6 +165,12 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         if (settings == backend.settings) { devices = list; selected = selected.intersect(list.map { it.name }.toSet()) }
         val active = withContext(Dispatchers.IO) { runCatching { backend.running() }.getOrDefault(emptyMap()) }
         if (settings == backend.settings) {
+            running.filter { (name, serial) -> active[name] != serial }.forEach { (name, serial) ->
+                rotationJobs.remove(name)?.cancel()
+                rotations.remove(name)
+                appliedRotations.remove(name)
+                rotationBases.remove(serial)
+            }
             val stopped = running.keys - active.keys
             for (device in devices.filter { it.name in stopped }) {
                 val image = withContext(Dispatchers.IO) { display.load(device)?.toComposeImageBitmap() }

@@ -61,11 +61,32 @@ fun main(args: Array<String>) {
     application {
         val scope = rememberCoroutineScope()
         val state = remember { AppState(scope) }
-        Window(onCloseRequest = ::exitApplication, title = "AvdBuddy", state = rememberWindowState(width = 1040.dp, height = 720.dp)) {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "AvdBuddy",
+            state = rememberWindowState(width = 1040.dp, height = 720.dp),
+            onPreviewKeyEvent = { event -> handleMainWindowShortcut(event, state) },
+        ) {
             configureMacWindow(window)
             window.minimumSize = java.awt.Dimension(760, 540)
             AvdBuddyTheme { App(state) }
         }
+    }
+}
+
+// Handle shortcuts before focused content, including the emulator and text fields.
+private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    if (event.isMetaPressed) when (event.key) {
+        Key.DirectionRight -> return state.rotateCurrent(clockwise = true)
+        Key.DirectionLeft -> return state.rotateCurrent(clockwise = false)
+    }
+    if (!event.isMetaPressed && !event.isCtrlPressed) return false
+    return when (event.key) {
+        Key.N -> { if (!state.busy) state.resetCreate(); true }
+        Key.Comma -> { state.showSettings = true; true }
+        Key.Backspace -> { state.previewDevice?.let { state.deleteDevices = listOf(it) }; true }
+        else -> false
     }
 }
 
@@ -125,14 +146,7 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
-    Row(Modifier.fillMaxSize().background(Palette.background).testTag("DeviceShelf").onPreviewKeyEvent {
-        if (it.type == KeyEventType.KeyDown && (it.isMetaPressed || it.isCtrlPressed)) when(it.key) {
-            Key.N -> { if (!state.busy) { state.resetCreate() }; true }
-            Key.Comma -> { state.showSettings = true; true }
-            Key.Backspace -> { state.previewDevice?.let { state.deleteDevices = listOf(it) }; true }
-            else -> false
-        } else false
-    }) {
+    Row(Modifier.fillMaxSize().background(Palette.background).testTag("DeviceShelf")) {
         Column(Modifier.width(270.dp).fillMaxHeight().background(Palette.panel.copy(alpha=.55f)).testTag("DeviceSidebar")) {
             Spacer(Modifier.height(macTitleInset))
             Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
