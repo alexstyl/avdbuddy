@@ -35,7 +35,7 @@ JBR 25, which Jewel requires. Xcode is not required for development.
 ## Features
 
 - Device sidebar and a large, framed emulator preview
-- Select devices without starting them; stopped previews show the last captured screen in monochrome
+- Select devices without starting them; stopped devices show their icon, name, and a Start button
 - Central Play button boots/resumes the selected device; new launches run inside the app without a separate emulator window
 - Native live screen streaming with immediate touch/drag input and basic ASCII keyboard input
 - Host GPU acceleration for all launches, new devices, and duplicates
