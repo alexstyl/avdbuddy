@@ -8,11 +8,13 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -67,7 +69,7 @@ fun main(args: Array<String>) {
 
 // Handle shortcuts before focused content, including the emulator and text fields.
 private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean {
-    if (event.type != KeyEventType.KeyDown) return false
+    if (event.type != KeyEventType.KeyDown || state.deleteDevices.isNotEmpty()) return false
     if (event.isMetaPressed) when (event.key) {
         Key.DirectionRight -> return state.rotateCurrent(clockwise = true)
         Key.DirectionLeft -> return state.rotateCurrent(clockwise = false)
@@ -128,7 +130,9 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
-    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).testTag("DeviceShelf")) {
+    Box(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).focusProperties { canFocus = state.deleteDevices.isEmpty() }
+        .then(if (state.deleteDevices.isNotEmpty()) Modifier.clearAndSetSemantics { } else Modifier).testTag("DeviceShelf")) {
         // Extend the sidebar and divider to the window edge, with controls below the traffic lights.
         Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.panelBackground).testTag("DeviceSidebar").padding(top = topInset)) {
             Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -178,13 +182,14 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
             }
         }
     }
+    if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
+    }
     if(state.showSettings) SettingsWindow(state)
     if(state.showCreate) CreateWindow(state)
     LaunchedEffect(state, autoRefresh) { if (autoRefresh) state.updates.monitor() }
     if(state.updates.visible) UpdatesWindow(state)
     if(state.showAbout) AboutWindow(state)
     state.renameDevice?.let { device -> RenameWindow(state,device) }
-    if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
 }
 
 @Composable private fun DeviceRow(device: Device, state: AppState, orderedNames: List<String>) {
