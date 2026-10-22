@@ -39,8 +39,12 @@ def verify_runtime(root):
         raise ValueError("Packaged application must contain exactly one nightly build identity")
     # Run the shipped launcher with its bundled JVM. Main's diagnostics path
     # returns before Compose starts; no windows, emulator boot, or UI driver.
-    name = "AvdBuddy-Nightly.exe" if sys.platform == "win32" else "AvdBuddy-Nightly" if sys.platform == "darwin" else "avdbuddy-nightly"
-    launchers = [p for p in root.rglob(name) if p.is_file()]
+    name = "avdbuddy-nightly.exe" if sys.platform == "win32" else "avdbuddy-nightly"
+    launchers = [p for p in root.rglob("*") if p.name.lower() == name and p.is_file()]
+    # Linux's installer may add a lowercase wrapper; prefer jpackage's bin launcher.
+    native_bin = [p for p in launchers if p.parent.name == "bin"]
+    if native_bin:
+        launchers = native_bin
     if len(launchers) != 1:
         raise ValueError(f"Expected one packaged launcher, found {launchers}")
     environment = dict(os.environ)
