@@ -234,14 +234,13 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                     clickModifiers = PointerKeyboardModifiers()
                 }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-                Icon(device.type.label.lowercase())
+                Icon(device.type.label.lowercase(), tint = if (running) Color(0xFF2E7D32) else JewelTheme.globalColors.text.info)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Label(device.displayName, maxLines=1)
                     Spacer(Modifier.height(4.dp))
                     Label(subtitle, color=JewelTheme.globalColors.text.info, maxLines=1)
                 }
-                if(running && operation == null) Icon("play")
                 if(operation != null) {
                     Spacer(Modifier.width(10.dp))
                     org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))
