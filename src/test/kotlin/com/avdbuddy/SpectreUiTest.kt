@@ -20,11 +20,12 @@ class SpectreUiTest {
     fun `real Jewel windows support settings and device creation`():Unit=runSpectreTest {
         val fake=FakeAndroid(root);fake.device("Pixel_9", "36");fake.device("Pixel_Tablet","35","pixel_tablet")
         fake.additionalImages = "\nsystem-images;android-36.1;google_apis_playstore;arm64-v8a | 1 | Google Play ARM 64 Extension Image\nsystem-images;android-36;google_apis;x86_64 | 1 | Google APIs Intel System Image\nsystem-images;android-21;google_apis;x86 | 1 | Lollipop Google APIs Intel System Image\nsystem-images;android-10;default;armeabi-v7a | 1 | Gingerbread ARM System Image\n"
+        val display = FixtureDisplay()
         var availableSpace = 128 * GIB
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
         lateinit var state:AppState
         val window=withContext(Dispatchers.Main) {
-            state=AppState(scope,SettingsStore(File(root,"settings.properties")),fake.settings,fake) { spec, settings ->
+            state=AppState(scope,SettingsStore(File(root,"settings.properties")),fake.settings,fake,display) { spec, settings ->
                 calculateStoragePlan(settings,spec,if(spec.image.installed) ImageFootprint(0,0) else ImageFootprint(2*GIB,6*GIB)) { DiskSpace("test-volume",availableSpace) }
             }
             ComposeWindow().apply {
@@ -75,6 +76,16 @@ class SpectreUiTest {
             ImageIO.write(automator.screenshot(updatesSurface.windowIndex), "png", File(reports, "10-software-updates.png"))
             withContext(Dispatchers.Main) { state.updates.visible = false }
             automator.waitUntilGone(tag="UpdatesWindow")
+            val sidebar=automator.waitForNode(tag="DeviceSidebar")
+            val preview=automator.waitForNode(tag="EmulatorPanel")
+            assertTrue(sidebar.boundsOnScreen.x + sidebar.boundsOnScreen.width <= preview.boundsOnScreen.x)
+            click("Device-Pixel_Tablet")
+            assertEquals("Pixel Tablet",automator.waitForNode(tag="PreviewDeviceName").text)
+            click("Device-Pixel_9")
+            assertEquals("Pixel 9",automator.waitForNode(tag="PreviewDeviceName").text)
+            assertTrue(fake.active.isEmpty(), "Selecting devices must never start them")
+            assertNotNull(automator.findOneByTestTag("StoppedDeviceScreen"))
+            capture("01-device-shelf")
             click("Settings");automator.waitForNode(tag="SettingsWindow")
             val sdk=automator.waitForNode(tag="SdkLocationLabel");val avd=automator.waitForNode(tag="AvdLocationLabel")
             assertTrue(sdk.boundsOnScreen.y<avd.boundsOnScreen.y,"SDK location must appear above emulator location")
@@ -140,8 +151,16 @@ class SpectreUiTest {
             click("ContinueCreate");automator.waitForNode(tag="CreateDone")
             capture("06-device-created","Your device is ready")
             click("CreateDone");automator.waitForNode(tag="Device-Spectre_Pixel")
+            click("Device-Spectre_Pixel")
             click("Launch-Spectre_Pixel")
             withTimeout(5000){while(fake.active["Spectre_Pixel"]==null)delay(50)}
+            automator.waitForNode(tag="LiveDeviceScreen")
+            click("DeviceHome")
+            withTimeout(5000) { while(display.inputEvents.isEmpty()) delay(50) }
+            assertEquals(listOf("keyevent","3"),display.inputEvents.last())
+            click("Stop-Spectre_Pixel")
+            automator.waitForNode(tag="StoppedDeviceScreen")
+            assertContains(display.captures,"Spectre_Pixel")
             click("Actions-Spectre_Pixel");click("Delete-Spectre_Pixel")
             automator.waitForNode(tag="DeleteWindow");capture("07-delete-confirmation","Delete device?")
             click("CancelDelete");assertTrue(File(fake.avds,"Spectre_Pixel.ini").exists())

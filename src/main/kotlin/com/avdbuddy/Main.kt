@@ -109,15 +109,15 @@ fun main(args: Array<String>) {
 }
 
 @Composable fun App(state: AppState, autoRefresh: Boolean = true) {
+    LaunchedEffect(state) { state.observeDisplays() }
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
     Column(Modifier.fillMaxSize().background(Palette.background).testTag("DeviceShelf").onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && (it.isMetaPressed || it.isCtrlPressed)) when(it.key) {
-            Key.A -> { state.selected = state.devices.map(Device::name).toSet(); true }
             Key.N -> { if (!state.busy) { state.resetCreate() }; true }
             Key.Comma -> { state.showSettings = true; true }
-            Key.Backspace -> { if (state.selectedDevices.isNotEmpty()) state.deleteDevices = state.selectedDevices; true }
+            Key.Backspace -> { state.previewDevice?.let { state.deleteDevices = listOf(it) }; true }
             else -> false
         } else false
     }) {
@@ -132,24 +132,28 @@ fun main(args: Array<String>) {
             IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if (state.ready) state.resetCreate() else state.showSettings = true }
         }
         Rule()
-        Row(Modifier.fillMaxWidth().padding(horizontal=24.dp,vertical=18.dp),verticalAlignment=Alignment.CenterVertically) {
-            Label("Your devices",size=13,weight=FontWeight.Medium)
-            Spacer(Modifier.width(10.dp)); Label("${state.devices.size}",size=12,color=Palette.muted)
-            Spacer(Modifier.weight(1f))
-            if(state.running.isNotEmpty()) ActionButton("Stop all", enabled = !state.busy) { state.stopAll() }
-            if(state.selectedDevices.size > 1) { Spacer(Modifier.width(10.dp)); ActionButton("Delete selected",enabled=!state.busy) { state.deleteDevices=state.selectedDevices } }
-        }
-        if (state.devices.isEmpty()) {
-            Column(Modifier.weight(1f).fillMaxWidth().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
-                Box(Modifier.size(72.dp).background(Palette.panel,RoundedCornerShape(18.dp)),contentAlignment=Alignment.Center) { Icon("phone",Palette.muted,Modifier.size(36.dp)) }
-                Spacer(Modifier.height(20.dp)); Label("A home for your Android devices",size=21,weight=FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp)); Label("Create a virtual device. Keep Android Studio closed.",color=Palette.muted)
-                Spacer(Modifier.height(24.dp)); ActionButton("Create a device",primary=true,tag="EmptyCreate") { if(state.ready) state.resetCreate() else state.showSettings=true }
-                Spacer(Modifier.height(40.dp))
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.width(270.dp).fillMaxHeight().background(Palette.panel.copy(alpha=.55f)).testTag("DeviceSidebar")) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
+                    Label("Devices", color=Palette.muted, size=12)
+                    Spacer(Modifier.weight(1f))
+                    Label("${state.devices.size}", color=Palette.muted, size=12)
+                }
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
+                }
+                if(state.running.isNotEmpty()) Box(Modifier.padding(12.dp)) { ActionButton("Stop all", enabled=!state.busy) { state.stopAll() } }
             }
-        } else {
-            LazyVerticalGrid(GridCells.Adaptive(266.dp), Modifier.weight(1f).padding(horizontal=22.dp), contentPadding=PaddingValues(bottom=24.dp),horizontalArrangement=Arrangement.spacedBy(18.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-                items(state.devices,key={it.name}) { DeviceCard(it,state) }
+            Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.border))
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                val device = state.previewDevice
+                if (device != null) EmulatorPanel(device, state)
+                else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {
+                    Icon("phone", modifier=Modifier.size(48.dp))
+                    Spacer(Modifier.height(20.dp)); Label("Your next Android device", size=21, weight=FontWeight.SemiBold)
+                    Spacer(Modifier.height(10.dp)); Label("Create a device to see it here.", color=Palette.muted)
+                    Spacer(Modifier.height(24.dp)); ActionButton("Create a device", primary=true, tag="EmptyCreate") { if(state.ready) state.resetCreate() else state.showSettings=true }
+                }
             }
         }
         if(state.status.isNotBlank()) {
@@ -174,53 +178,29 @@ fun main(args: Array<String>) {
     if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
 }
 
-@Composable private fun DeviceCard(device: Device,state: AppState) {
-    val selected = device.name in state.selected
+@Composable private fun DeviceRow(device: Device, state: AppState) {
+    val selected = state.previewDevice?.name == device.name
     val running = device.name in state.running
-    var toggleSelection by remember { mutableStateOf(false) }
-    var extendSelection by remember { mutableStateOf(false) }
     ContextMenuArea(items = { listOf(
-        ContextMenuItem(if(running) "Stop" else "Launch") { if(running) state.stop(device) else state.launch(device) },
         ContextMenuItem("Duplicate") { state.duplicate(device) },
         ContextMenuItem("Rename…") { state.renameDevice=device },
         ContextMenuItem("Show in Finder") { state.reveal(device) },
         ContextMenuItem("Delete…") { state.deleteDevices=listOf(device) }
     ) }) {
-        Column(Modifier.fillMaxWidth().testTag("Device-${device.name}").clip(RoundedCornerShape(11.dp)).background(Palette.panel)
-            .border(if(selected) 2.dp else 1.dp,if(selected) Palette.accent else Palette.border,RoundedCornerShape(11.dp))
-            .semantics { this.selected=selected; contentDescription="${device.displayName}, ${androidFamilyTitle(device.api)}, ${device.type.label}" }
-            .onPointerEvent(PointerEventType.Press) {
-                toggleSelection=it.keyboardModifiers.isMetaPressed || it.keyboardModifiers.isCtrlPressed
-                extendSelection=it.keyboardModifiers.isShiftPressed
+        Row(Modifier.fillMaxWidth().testTag("Device-${device.name}")
+            .clip(RoundedCornerShape(8.dp)).background(if(selected) Palette.accent.copy(alpha=.18f) else Color.Transparent)
+            .border(1.dp, if(selected) Palette.accent.copy(alpha=.65f) else Color.Transparent, RoundedCornerShape(8.dp))
+            .semantics { this.selected=selected; contentDescription="${device.displayName}, ${androidFamilyTitle(device.api)}" }
+            .clickable { state.selectPreview(device) }.padding(start=12.dp, top=10.dp, bottom=10.dp, end=4.dp), verticalAlignment=Alignment.CenterVertically) {
+            Icon("phone", if(running) Palette.green else Palette.muted, Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Label(device.displayName, weight=FontWeight.SemiBold, maxLines=1)
+                Spacer(Modifier.height(4.dp))
+                Label(if(device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api), size=11, color=Palette.muted, maxLines=1)
+                if(running || device.name in state.starting) Label(if(running) "Running" else "Starting…", size=10, color=Palette.green)
             }
-            .combinedClickable(enabled=!state.busy,onClick={
-                state.selected = when {
-                    toggleSelection -> if(device.name in state.selected) state.selected-device.name else state.selected+device.name
-                    extendSelection && state.selected.isNotEmpty() -> {
-                        val names=state.devices.map(Device::name)
-                        val anchor=names.indexOf(state.selected.first()).coerceAtLeast(0)
-                        val end=names.indexOf(device.name)
-                        names.subList(minOf(anchor,end),maxOf(anchor,end)+1).toSet()
-                    }
-                    else -> setOf(device.name)
-                }
-            },onDoubleClick={if(running) state.stop(device) else state.launch(device)}).padding(7.dp)) {
-            Box(Modifier.fillMaxWidth().height(155.dp).clip(RoundedCornerShape(6.dp))) {
-                DevicePreview(device)
-                if(running) Row(Modifier.align(Alignment.TopEnd).padding(9.dp).background(Color(0xCC242424),RoundedCornerShape(20.dp)).padding(horizontal=8.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Box(Modifier.size(5.dp).background(Palette.green,RoundedCornerShape(4.dp))); Spacer(Modifier.width(5.dp));Label("Running",size=10)
-                }
-            }
-            Spacer(Modifier.height(11.dp))
-            Row(Modifier.padding(horizontal=7.dp),verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Label(device.displayName,size=13,weight=FontWeight.Medium,maxLines=1)
-                    Spacer(Modifier.height(4.dp)); Label(if(device.missingStorage) "Storage unavailable" else "${androidFamilyTitle(device.api)} · ${device.type.label}",color=if(device.missingStorage) Palette.error else Palette.muted,size=11,maxLines=1)
-                }
-                IconButton(if(running) "stop" else "play",if(running) "Stop ${device.displayName}" else "Launch ${device.displayName}","Launch-${device.name}",!state.busy && !device.missingStorage) { if(running) state.stop(device) else state.launch(device) }
-                DeviceActions(device,state)
-            }
-            Spacer(Modifier.height(7.dp))
+            DeviceActions(device,state)
         }
     }
 }
@@ -235,30 +215,6 @@ fun main(args: Array<String>) {
             MenuItem(onClick={state.deleteDevices=listOf(device)},enabled=!state.busy,modifier=Modifier.fillMaxWidth().testTag("Delete-${device.name}")) { Label("Delete…",Modifier.padding(9.dp),color=Palette.error) }
         }
     },anchor={IconButton("more","Device actions","Actions-${device.name}",!state.busy){expanded=true}})
-}
-
-@Composable private fun DevicePreview(device: Device) {
-    val hash=(device.config["avdbuddy.color.seed"]?:device.name).hashCode()
-    val colors=if(hash%2==0) listOf(Color(0xFF48586A),Color(0xFF1D3039),Color(0xFF10202B)) else listOf(Color(0xFF8A5B44),Color(0xFF3D363C),Color(0xFF252C38))
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(colors)),contentAlignment=Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val w=size.width;val h=size.height
-            drawCircle(Color.White.copy(alpha=.035f),w*.65f,Offset(w*.9f,h*.9f))
-            drawCircle(Color.White.copy(alpha=.035f),w*.4f,Offset(w*.08f,h*.15f))
-            val tablet=device.type in listOf(DeviceType.TABLET,DeviceType.TV,DeviceType.DESKTOP,DeviceType.CAR,DeviceType.FOLDABLE)
-            val pw=if(tablet) 146.dp.toPx() else 66.dp.toPx();val ph=if(tablet) 91.dp.toPx() else 127.dp.toPx()
-            val x=(w-pw)/2;val y=(h-ph)/2
-            drawRoundRect(Color(0xFF0E1113),Offset(x-3,y-3),Size(pw+6,ph+6),CornerRadius(11.dp.toPx()))
-            drawRoundRect(Brush.linearGradient(listOf(colors[0].copy(red=(colors[0].red+.15f).coerceAtMost(1f)),colors[1])),Offset(x,y),Size(pw,ph),CornerRadius(9.dp.toPx()))
-            clipRect(x,y,x+pw,y+ph) {
-                drawCircle(Color(0xFFB9CDB6).copy(alpha=.4f),pw*.74f,Offset(x+pw*.9f,y+ph*.75f))
-                drawCircle(Color(0xFF5A7670).copy(alpha=.8f),pw*.8f,Offset(x+pw*.22f,y+ph*.86f))
-                drawCircle(Color(0xFF203E44).copy(alpha=.85f),pw*.75f,Offset(x+pw*.63f,y+ph*1.04f))
-            }
-            drawCircle(Color(0xFF101516),2.dp.toPx(),Offset(w/2,y+5.dp.toPx()))
-            drawRoundRect(Color.White.copy(alpha=.65f),Offset(w/2-10.dp.toPx(),y+ph-5.dp.toPx()),Size(20.dp.toPx(),2.dp.toPx()),CornerRadius(2.dp.toPx()))
-        }
-    }
 }
 
 @Composable fun Section(title: String, icon: String = "settings", subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {

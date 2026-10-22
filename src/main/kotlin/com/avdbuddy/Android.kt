@@ -204,7 +204,7 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
     fun launch(device: Device) {
         toolchain.requireReady(); requireAvdStorage()
         require(!device.missingStorage) { "${device.displayName} has unavailable storage. Connect its drive before launching." }
-        val args = mutableListOf("-avd", device.name)
+        val args = mutableListOf("-avd", device.name, "-no-window")
         val skin = device.config["skin.path"]?.let(::File)
         if (device.config["showDeviceFrame"] != "no" && skin?.isDirectory == true) args += listOf("-skindir", skin.parent, "-skin", skin.name)
         command(toolchain.emulator, args, detached = true)

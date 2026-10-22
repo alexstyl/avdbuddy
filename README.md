@@ -34,16 +34,18 @@ JBR 25, which Jewel requires. Xcode is not required for development.
 
 ## Features
 
-- Device shelf with phone, foldable, tablet, Wear OS, desktop, TV, automotive, and XR devices
-- Double-click to launch or stop; right-click for duplicate, rename, delete, and Show in Finder
+- Device sidebar and a large, framed emulator preview
+- Select devices without starting them; stopped previews show the last captured screen in monochrome
+- Central Play button boots/resumes the selected device; new launches run inside the app without a separate emulator window
+- Live color preview with taps, swipes, basic ASCII keyboard input, Back, Home, and Recents
+- Right-click or use the device menu for duplicate, rename, delete, and Show in Finder
 - Guided device creation with Android versions on the left and minor/API releases
   on the right, plus downloads, device profiles,
   RAM, internal storage, SD cards, and device frames
 - SDK and emulator storage settings, with SDK validation and unavailable-drive errors
 - Running-device detection and Stop all
 - Diagnostics and Nucleus automatic update checks
-- Keyboard shortcuts: Cmd+N to create, Cmd+, for Settings, Cmd+A to select all,
-  and Cmd+Backspace to delete selected devices. Cmd-click toggles selection; Shift-click selects a range
+- Keyboard shortcuts: Cmd+N to create, Cmd+, for Settings, and Cmd+Backspace to delete the selected device
 
 Settings imports the SDK and AVD folder preferences from the previous Swift app on
 first use, including an external or custom device location. Settings are saved in
@@ -60,6 +62,17 @@ storage is reported before an install starts.
 
 For command-line diagnostics, run the packaged app executable with `--diagnostics`.
 
+The live view currently uses periodic ADB screen captures, rather than a video stream.
+It is suitable for inspecting and interacting with screens, but animations are not
+full frame rate and multi-touch is not supported. Devices already launched in an
+external emulator window can also be previewed; that existing window stays open.
+
+Previews are saved as `.avdbuddy-preview.png` inside each AVD folder, updated while
+running and captured again before stopping through AvdBuddy. A previously saved
+Quick Boot screenshot is used if available. No screenshot is invented for a device
+that has never been captured. The preview image is separate from Android's Quick
+Boot state: normal emulator snapshot loading/saving remains enabled.
+
 ## Verification
 
 ```bash
@@ -69,7 +82,8 @@ For command-line diagnostics, run the packaged app executable with `--diagnostic
 
 Backend tests use temporary SDK and AVD fixtures. The UI test uses
 [Spectre by Sebastiano Poggi](https://spectre.sebastiano.dev/) to drive real, visible
-Jewel/Compose windows: changing storage, selecting a device type and system image,
+Jewel/Compose windows: device selection without booting, monochrome/live preview
+transitions, touch input, changing storage, selecting a device type and system image,
 configuring and creating a device, launching it, confirming/cancelling deletion,
 and renaming. It verifies SDK-before-storage ordering and writes screenshots to
 `build/reports/spectre/`.

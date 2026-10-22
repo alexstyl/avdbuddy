@@ -1,9 +1,12 @@
 package com.avdbuddy
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -16,11 +19,56 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class AppState(val scope: CoroutineScope, private val store: SettingsStore = SettingsStore(),
                initial: AppSettings = store.load(), private val executor: CommandExecutor = ProcessExecutor(),
+               val display: DeviceDisplay = AdbDeviceDisplay(),
                private val storagePlanner: (CreateSpec, AppSettings) -> StoragePlan = ::planDeviceStorage) {
     var settings by mutableStateOf(initial); private set
     var devices by mutableStateOf(emptyList<Device>()); private set
     var running by mutableStateOf(emptyMap<String, String>()); private set
     var selected by mutableStateOf(setOf<String>())
+    var previewName by mutableStateOf<String?>(null)
+    val previewDevice get() = devices.firstOrNull { it.name == previewName } ?: selectedDevices.firstOrNull() ?: devices.firstOrNull()
+    val frames = mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
+    val displayErrors = mutableStateMapOf<String, String>()
+    var starting by mutableStateOf(setOf<String>()); private set
+    fun selectPreview(device: Device) { previewName = device.name; selected = setOf(device.name) }
+    suspend fun observeDisplays() {
+        val loaded = mutableSetOf<String>()
+        var lastBackground = 0L
+        while (currentCoroutineContext().isActive) {
+            val backendSettings = settings
+            val current = previewDevice
+            val paths = devices.map { it.directory.absolutePath }.toSet()
+            loaded.retainAll(paths)
+            frames.keys.retainAll(paths)
+            devices.forEach { device ->
+                val key = device.directory.absolutePath
+                if (loaded.add(key)) {
+                    val image = withContext(Dispatchers.IO) { display.load(device)?.toComposeImageBitmap() }
+                    if (image != null) frames[key] = image
+                }
+            }
+            val background = System.currentTimeMillis() - lastBackground > 5000
+            if (background) lastBackground = System.currentTimeMillis()
+            val active = running.toMap()
+            devices.filter { it.name in active && (it.name == current?.name || background) }.forEach { device ->
+                val image = withContext(Dispatchers.IO) { runCatching { display.capture(backendSettings, device, active.getValue(device.name))?.toComposeImageBitmap() }.getOrNull() }
+                if (settings == backendSettings) {
+                    if (image != null) { frames[device.directory.absolutePath] = image; displayErrors.remove(device.name) }
+                    else displayErrors[device.name] = "Waiting for the device screen…"
+                }
+            }
+            delay(200)
+        }
+    }
+    private val inputMutex = Mutex()
+    fun sendInput(device: Device, arguments: List<String>) {
+        val serial = running[device.name] ?: return
+        val current = settings
+        scope.launch {
+            try { inputMutex.withLock { withContext(Dispatchers.IO) { display.input(current, serial, arguments) } } }
+            catch (e: Exception) { if (e is CancellationException) throw e; report(e) }
+        }
+    }
     var images by mutableStateOf(emptyList<SystemImage>()); private set
     var profiles by mutableStateOf(emptyList<DeviceProfile>()); private set
     var busy by mutableStateOf(false); private set
@@ -49,7 +97,14 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         val list = withContext(Dispatchers.IO) { backend.devices() }
         if (settings == backend.settings) { devices = list; selected = selected.intersect(list.map { it.name }.toSet()) }
         val active = withContext(Dispatchers.IO) { runCatching { backend.running() }.getOrDefault(emptyMap()) }
-        if (settings == backend.settings) running = active
+        if (settings == backend.settings) {
+            val stopped = running.keys - active.keys
+            for (device in devices.filter { it.name in stopped }) {
+                val image = withContext(Dispatchers.IO) { display.load(device)?.toComposeImageBitmap() }
+                if (image != null) frames[device.directory.absolutePath] = image
+            }
+            running = active
+        }
     }
     fun refreshAsync() = scope.launch { runCatching { refresh() }.onFailure { report(it) } }
     private fun report(t: Throwable) { status = t.message ?: t.toString(); error = true }
@@ -63,9 +118,39 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             finally { busy = false }
         }
     }
-    fun launch(device: Device) = action("Launched ${device.displayName}.") { it.launch(device) }
-    fun stop(device: Device) = action("Stopped ${device.displayName}.") { backend -> running[device.name]?.let(backend::stop) }
-    fun stopAll() = action("Stopped all running emulators.") { backend -> running.values.forEach(backend::stop) }
+    fun launch(device: Device) {
+        if (busy || device.name in running || device.name in starting) return
+        selectPreview(device)
+        starting = starting + device.name
+        val backend = service
+        scope.launch {
+            busy = true
+            try {
+                withContext(Dispatchers.IO) { backend.launch(device) }
+                status = "Starting ${device.displayName}…"; error = false
+            } catch (e: Exception) {
+                starting = starting - device.name
+                if (e is CancellationException) throw e
+                report(e); return@launch
+            } finally { busy = false }
+            try {
+                val started = withTimeoutOrNull(90_000) {
+                    while (device.name !in running) { refresh(); delay(1000) }
+                    true
+                } ?: false
+                if (!started) { status = "${device.displayName} did not start. Try again or check the Android SDK."; error = true }
+                else status = "${device.displayName} is running."
+            } finally { starting = starting - device.name }
+        }
+    }
+    fun stop(device: Device) = action("Stopped ${device.displayName}.") { backend ->
+        running[device.name]?.let { serial ->
+            runCatching { display.capture(backend.settings, device, serial) }
+            backend.stop(serial)
+        }
+    }
+    fun stopAll() = action("Stopped all running emulators.") { backend -> running.forEach { (name, serial) ->
+        devices.firstOrNull { it.name == name }?.let { runCatching { display.capture(backend.settings, it, serial) } }; backend.stop(serial) } }
     fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") { it.duplicate(device) }
     fun rename(device: Device, name: String) = action("Renamed device to $name.") {
         require(device.name !in running) { "Stop the device before renaming." }; it.rename(device, name.trim())
@@ -117,7 +202,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
                     backend.validateName(spec.name)
                     backend.create(spec, token) { chunk -> output.update { (it + chunk.replace("\r\n", "\n").replace('\r', '\n')).takeLast(80_000) } } }
                 createFinished = true; status = "Created ${spec.name}."; error = false
-                refresh(); selected = setOf(spec.name)
+                refresh(); selected = setOf(spec.name); previewName = spec.name
                 images = images.map { if (it.path == spec.image.path) it.copy(installed = true) else it }
             } catch (t: Exception) { createError = if (token.get()) "Creation cancelled." else t.message ?: "Creation failed." }
             finally { creating = false; busy = false }
