@@ -1,0 +1,135 @@
+package com.avdbuddy
+
+import androidx.compose.runtime.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import java.awt.Desktop
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.io.File
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.util.concurrent.atomic.AtomicBoolean
+
+class AppState(val scope: CoroutineScope, private val store: SettingsStore = SettingsStore(),
+               initial: AppSettings = store.load(), private val executor: CommandExecutor = ProcessExecutor(),
+               private val storagePlanner: (CreateSpec, AppSettings) -> StoragePlan = ::planDeviceStorage) {
+    var settings by mutableStateOf(initial); private set
+    var devices by mutableStateOf(emptyList<Device>()); private set
+    var running by mutableStateOf(emptyMap<String, String>()); private set
+    var selected by mutableStateOf(setOf<String>())
+    var images by mutableStateOf(emptyList<SystemImage>()); private set
+    var profiles by mutableStateOf(emptyList<DeviceProfile>()); private set
+    var busy by mutableStateOf(false); private set
+    var status by mutableStateOf("")
+    var error by mutableStateOf(false); private set
+    var catalogLoading by mutableStateOf(false); private set
+    var catalogError by mutableStateOf(""); private set
+    var showSettings by mutableStateOf(false)
+    var showCreate by mutableStateOf(false)
+    var showAbout by mutableStateOf(false)
+    var renameDevice by mutableStateOf<Device?>(null)
+    var deleteDevices by mutableStateOf(emptyList<Device>())
+    var creating by mutableStateOf(false); private set
+    var createFinished by mutableStateOf(false); private set
+    var createError by mutableStateOf(""); private set
+    val output = MutableStateFlow("")
+    private var cancellation = AtomicBoolean()
+    private var catalogJob: Job? = null
+    val service get() = AndroidService(settings, executor)
+    val ready get() = service.toolchain.ready
+    val selectedDevices get() = devices.filter { it.name in selected }
+    val totalBytes get() = devices.sumOf(Device::bytes)
+
+    suspend fun refresh() {
+        val backend = service
+        val list = withContext(Dispatchers.IO) { backend.devices() }
+        if (settings == backend.settings) { devices = list; selected = selected.intersect(list.map { it.name }.toSet()) }
+        val active = withContext(Dispatchers.IO) { runCatching { backend.running() }.getOrDefault(emptyMap()) }
+        if (settings == backend.settings) running = active
+    }
+    fun refreshAsync() = scope.launch { runCatching { refresh() }.onFailure { report(it) } }
+    private fun report(t: Throwable) { status = t.message ?: t.toString(); error = true }
+    private fun action(success: String, block: (AndroidService) -> Unit) {
+        if (busy) return
+        val backend = service
+        scope.launch {
+            busy = true; error = false
+            try { withContext(Dispatchers.IO) { block(backend) }; status = success; refresh() }
+            catch (t: Exception) { report(t) }
+            finally { busy = false }
+        }
+    }
+    fun launch(device: Device) = action("Launched ${device.displayName}.") { it.launch(device) }
+    fun stop(device: Device) = action("Stopped ${device.displayName}.") { backend -> running[device.name]?.let(backend::stop) }
+    fun stopAll() = action("Stopped all running emulators.") { backend -> running.values.forEach(backend::stop) }
+    fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") { it.duplicate(device) }
+    fun rename(device: Device, name: String) = action("Renamed device to $name.") {
+        require(device.name !in running) { "Stop the device before renaming." }; it.rename(device, name.trim())
+    }
+    fun delete(devices: List<Device>) = action("Deleted ${devices.size} device${if (devices.size == 1) "" else "s"}.") { backend ->
+        devices.forEach { device -> running[device.name]?.let(backend::stop); backend.delete(device) }
+    }
+    fun reveal(device: Device) = action("Opened ${device.displayName} in Finder.") {
+        val file = device.directory.takeIf(File::exists) ?: File(it.avdRoot, "${device.name}.ini")
+        require(file.exists()) { "The device's storage is unavailable." }
+        Desktop.getDesktop().browseFileDirectory(file)
+    }
+    fun saveSettings(sdk: String, avds: String): String? {
+        if (busy) return "Wait for the current operation to finish."
+        if (sdk.isBlank() || avds.isBlank()) return "Choose both an SDK folder and an emulator storage folder."
+        val sdkFolder = expandPath(sdk); val avdFolder = expandPath(avds)
+        if (!Toolchain(sdkFolder).ready) return "Select an SDK containing command-line tools, emulator, and platform-tools."
+        if (!avdFolder.isDirectory || !avdFolder.canWrite()) return "Choose an available, writable emulator folder."
+        val updated = AppSettings(sdkFolder.path, avdFolder.path)
+        return runCatching {
+            store.save(updated); settings = updated; selected = emptySet(); images = emptyList(); profiles = emptyList()
+            catalogJob?.cancel(); catalogLoading = false; showSettings = false; status = "Settings saved."; error = false
+            refreshAsync(); null
+        }.getOrElse { it.message ?: "Could not save settings." }
+    }
+    fun loadCatalog() {
+        if (catalogLoading || images.isNotEmpty()) return
+        val backend = service
+        catalogJob = scope.launch {
+            catalogLoading = true; catalogError = ""
+            try {
+                backend.toolchain.requireReady()
+                val result = withContext(Dispatchers.IO) { backend.images() to backend.profiles() }
+                if (settings == backend.settings) { images = result.first; profiles = result.second }
+            } catch (t: Exception) { if (t !is CancellationException) catalogError = t.message ?: "Could not load Android versions." }
+            finally { catalogLoading = false }
+        }
+    }
+    suspend fun reviewStorage(spec: CreateSpec): StoragePlan = withContext(Dispatchers.IO) { storagePlanner(spec, settings) }
+    fun create(spec: CreateSpec) {
+        if (busy) return
+        cancellation = AtomicBoolean(); val token = cancellation; val backend = service
+        output.value = ""; createError = ""; createFinished = false; creating = true; busy = true
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val plan = storagePlanner(spec, backend.settings)
+                    check(plan.canCreate) { "Not enough available disk space to create this device. Free space and review the storage requirements, then retry." }
+                    backend.validateName(spec.name)
+                    backend.create(spec, token) { chunk -> output.update { (it + chunk.replace("\r\n", "\n").replace('\r', '\n')).takeLast(80_000) } } }
+                createFinished = true; status = "Created ${spec.name}."; error = false
+                refresh(); selected = setOf(spec.name)
+                images = images.map { if (it.path == spec.image.path) it.copy(installed = true) else it }
+            } catch (t: Exception) { createError = if (token.get()) "Creation cancelled." else t.message ?: "Creation failed." }
+            finally { creating = false; busy = false }
+        }
+    }
+    fun cancelCreate() { cancellation.set(true) }
+    fun resetCreate() { createFinished = false; createError = ""; output.value = ""; showCreate = true; loadCatalog() }
+    fun copyDiagnostics() {
+        val text = service.diagnostics()
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        status = "Diagnostics copied."; error = false
+    }
+    val updates = AppUpdates(scope)
+    fun checkUpdates() = updates.check()
+}

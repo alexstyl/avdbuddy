@@ -14,3 +14,7 @@ specs/
 output/
 skills/
 SOUL.md
+.gradle/
+.kotlin/
+build/
+.idea/

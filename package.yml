@@ -1,0 +1,10 @@
+name: avdbuddy
+description: Android Virtual Device manager for Compose Desktop.
+version: 1.0.0
+dependencies:
+  - org.jetbrains.compose.foundation:foundation:1.12.0
+  - org.jetbrains.jewel:jewel-int-ui-standalone:0.41.0-262.10968.63
+  - com.jetbrains.intellij.platform:icons:262.10968.63
+  - com.composables:composeunstyled-primitives:2.10.1
+  - org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2
+  - dev.nucleusframework:nucleus.updater-runtime:2.5.18
