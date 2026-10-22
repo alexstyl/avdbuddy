@@ -6,6 +6,7 @@ import java.nio.file.Path;
 /** A real, headless child process; never opens windows or starts an emulator. */
 public final class FixtureProcess {
     public static void main(String[] args) throws Exception {
+        System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
         switch (args[0]) {
             case "copy" -> Files.copy(Path.of(args[1]), System.out);
             case "fail" -> {

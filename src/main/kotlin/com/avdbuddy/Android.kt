@@ -82,7 +82,15 @@ data class Command(val executable: File, val args: List<String>, val env: Map<St
 fun interface CommandExecutor { fun run(command: Command, cancelled: AtomicBoolean, output: (String) -> Unit): String }
 class ProcessExecutor : CommandExecutor {
     override fun run(command: Command, cancelled: AtomicBoolean, output: (String) -> Unit): String {
-        val builder = ProcessBuilder(listOf(command.executable.path) + command.args).redirectErrorStream(true)
+        // cmd.exe treats semicolons as batch argument separators. Quote every
+        // argument, including SDK package IDs that contain no spaces.
+        val arguments = if (HostOs.detect() == HostOs.WINDOWS && command.executable.extension.lowercase() in listOf("bat", "cmd")) {
+            command.args.map {
+                require(it.none { char -> char == '"' || char == '\r' || char == '\n' }) { "Invalid SDK command argument." }
+                "\"$it\""
+            }
+        } else command.args
+        val builder = ProcessBuilder(listOf(command.executable.path) + arguments).redirectErrorStream(true)
         builder.environment().putAll(command.env)
         if (command.detached) {
             builder.redirectOutput(ProcessBuilder.Redirect.DISCARD).start().outputStream.close()

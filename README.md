@@ -5,7 +5,7 @@ Built with Compose Desktop and the default JetBrains Jewel light theme. No Mater
 
 The application targets macOS, Windows, and Linux. Install an Android SDK with
 command-line tools, emulator, and platform-tools for your host. Running devices
-requires the Android Emulator's normal hardware acceleration and graphics support
+requires the Android Emulator's normal hardware acceleration, runtime libraries, and graphics support
 (Windows hypervisor support or Linux KVM as appropriate).
 
 ## Run
@@ -58,7 +58,7 @@ app on first use. Saved settings and update preferences use native config folder
 SDK discovery checks the saved path, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, then the
 platform default. Device storage respects `ANDROID_AVD_HOME`,
 `ANDROID_EMULATOR_HOME`, and `ANDROID_USER_HOME`, defaulting to `~/.android/avd`.
-SDK paths, emulator paths, and ADB paths can contain spaces and Unicode characters.
+SDK, emulator, and ADB locations use host-native paths and accept spaces.
 
 Switching emulator folders does not move existing devices or change Android Studio's
 settings. System images remain under the selected SDK's `system-images` folder.

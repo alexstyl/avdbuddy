@@ -31,6 +31,11 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Install Linux emulator runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpulse0 libnss3 libxkbcommon-x11-0 libxcb-cursor0 libasound2t64 libglu1-mesa
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools emulator'
