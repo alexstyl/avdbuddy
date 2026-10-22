@@ -157,7 +157,6 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
             androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
             }
-            if(state.running.isNotEmpty()) Box(Modifier.padding(12.dp)) { ActionButton("Stop all", enabled=!state.busy) { state.stopAll() } }
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
                 IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
                 IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }

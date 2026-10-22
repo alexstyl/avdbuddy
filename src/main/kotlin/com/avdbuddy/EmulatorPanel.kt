@@ -59,7 +59,6 @@ import com.composeunstyled.UnstyledButton
                 Spacer(Modifier.height(3.dp))
                 Label(androidFamilyTitle(device.api), color=Palette.muted, size=12)
             }
-            if(running) ActionButton("Stop", enabled=!state.busy, tag="Stop-${device.name}") { state.stop(device) }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
             val bezel = 9.dp

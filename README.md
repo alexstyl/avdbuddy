@@ -44,7 +44,7 @@ JBR 25, which Jewel requires. Xcode is not required for development.
   on the right, plus downloads, device profiles,
   RAM, internal storage, SD cards, and device frames
 - SDK and emulator storage settings, with SDK validation and unavailable-drive errors
-- Running-device detection and Stop all
+- Running-device detection
 - Diagnostics and Nucleus automatic update checks
 - Keyboard shortcuts: Cmd+N to create, Cmd+, for Settings, and Cmd+Backspace to delete the selected device
 
