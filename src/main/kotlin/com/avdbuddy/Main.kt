@@ -23,9 +23,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import com.composeunstyled.UnstyledButton
-import com.composeunstyled.UnstyledDropdownMenu
-import com.composeunstyled.DropdownMenuPanel
-import com.composeunstyled.MenuItem
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -188,17 +185,21 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
 @Composable private fun DeviceRow(device: Device, state: AppState) {
     val selected = state.previewDevice?.name == device.name
     val running = device.name in state.running
-    ContextMenuArea(items = { listOf(
-        ContextMenuItem("Duplicate") { state.duplicate(device) },
-        ContextMenuItem("Rename…") { state.renameDevice=device },
-        ContextMenuItem("Show in Finder") { state.reveal(device) },
-        ContextMenuItem("Delete…") { state.deleteDevices=listOf(device) }
-    ) }) {
+    ContextMenuArea(items = { buildList {
+        if (!state.busy && device.name !in state.running) {
+            add(ContextMenuItem("Duplicate") { state.duplicate(device) })
+            add(ContextMenuItem("Rename…") { state.renameDevice=device })
+        }
+        add(ContextMenuItem("Show in Finder") { state.reveal(device) })
+        if (!state.busy) {
+            add(ContextMenuItem("Delete…") { state.deleteDevices=listOf(device) })
+        }
+    } }) {
         Row(Modifier.fillMaxWidth().testTag("Device-${device.name}")
             .clip(RoundedCornerShape(8.dp)).background(if(selected) Palette.accent.copy(alpha=.18f) else Color.Transparent)
             .border(1.dp, if(selected) Palette.accent.copy(alpha=.65f) else Color.Transparent, RoundedCornerShape(8.dp))
             .semantics { this.selected=selected; contentDescription="${device.displayName}, ${androidFamilyTitle(device.api)}" }
-            .clickable { state.selectPreview(device) }.padding(start=12.dp, top=10.dp, bottom=10.dp, end=4.dp), verticalAlignment=Alignment.CenterVertically) {
+            .clickable { state.selectPreview(device) }.padding(horizontal=12.dp, vertical=10.dp), verticalAlignment=Alignment.CenterVertically) {
             Icon("phone", if(running) Palette.green else Palette.muted, Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
@@ -207,21 +208,8 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
                 Label(if(device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api), size=11, color=Palette.muted, maxLines=1)
                 if(running || device.name in state.starting) Label(if(running) "Running" else "Starting…", size=10, color=Palette.green)
             }
-            DeviceActions(device,state)
         }
     }
-}
-
-@Composable private fun DeviceActions(device:Device,state:AppState) {
-    var expanded by remember { mutableStateOf(false) }
-    UnstyledDropdownMenu(expanded,{expanded=it},panel={
-        DropdownMenuPanel(Modifier.width(180.dp).background(Palette.toolbar,RoundedCornerShape(6.dp)).border(1.dp,Palette.border,RoundedCornerShape(6.dp)).padding(4.dp)) {
-            MenuItem(onClick={state.duplicate(device)},enabled=!state.busy&&device.name !in state.running,modifier=Modifier.fillMaxWidth().testTag("Duplicate-${device.name}")) { Label("Duplicate",Modifier.padding(9.dp)) }
-            MenuItem(onClick={state.renameDevice=device},enabled=!state.busy&&device.name !in state.running,modifier=Modifier.fillMaxWidth().testTag("Rename-${device.name}")) { Label("Rename…",Modifier.padding(9.dp)) }
-            MenuItem(onClick={state.reveal(device)},modifier=Modifier.fillMaxWidth().testTag("Reveal-${device.name}")) { Label("Show in Finder",Modifier.padding(9.dp)) }
-            MenuItem(onClick={state.deleteDevices=listOf(device)},enabled=!state.busy,modifier=Modifier.fillMaxWidth().testTag("Delete-${device.name}")) { Label("Delete…",Modifier.padding(9.dp),color=Palette.error) }
-        }
-    },anchor={IconButton("more","Device actions","Actions-${device.name}",!state.busy){expanded=true}})
 }
 
 @Composable fun Section(title: String, icon: String = "settings", subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
