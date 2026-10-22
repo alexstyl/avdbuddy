@@ -51,7 +51,16 @@ fun main(args: Array<String>) {
             onPreviewKeyEvent = { event -> handleMainWindowShortcut(event, state) },
         ) {
             window.minimumSize = java.awt.Dimension(760, 540)
-            AvdBuddyTheme { App(state) }
+            val isMacOS = System.getProperty("os.name").startsWith("Mac")
+            if (isMacOS) {
+                // Keep the native decorated window, with content behind a transparent title bar.
+                window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
+                window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
+                window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
+            }
+            AvdBuddyTheme {
+                App(state, topInset = if (isMacOS) 28.dp else 0.dp)
+            }
         }
     }
 }
@@ -114,13 +123,14 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     else OutlinedButton(onClick, Modifier.testTag(tag), enabled = enabled) { Text(text) }
 }
 
-@Composable fun App(state: AppState, autoRefresh: Boolean = true) {
+@Composable fun App(state: AppState, autoRefresh: Boolean = true, topInset: Dp = 0.dp) {
     LaunchedEffect(state) { state.observeDisplays() }
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
     Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).testTag("DeviceShelf")) {
-        Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.panelBackground).testTag("DeviceSidebar")) {
+        // Extend the sidebar and divider to the window edge, with controls below the traffic lights.
+        Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.panelBackground).testTag("DeviceSidebar").padding(top = topInset)) {
             Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
                 Label("Devices", color=JewelTheme.globalColors.text.info)
                 Spacer(Modifier.weight(1f))
@@ -141,7 +151,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
             }
         }
         Divider(Orientation.Vertical, Modifier.fillMaxHeight())
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        Box(Modifier.weight(1f).fillMaxHeight().padding(top = topInset)) {
             val device = state.previewDevice
             if (device != null) EmulatorPanel(device, state)
             else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {
