@@ -327,13 +327,6 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
         failure?.let { Label(it,color=JewelTheme.globalColors.text.error) }
     }
 }
-@Composable fun DeleteWindow(state:AppState) {
-    val devices=state.deleteDevices
-    Sheet("Delete ${if(devices.size==1)"device" else "${devices.size} devices"}?","DeleteWindow",height=310,onClose={state.deleteDevices=emptyList()},footer={
-        Spacer(Modifier.weight(1f));ActionButton("Cancel",tag="CancelDelete"){state.deleteDevices=emptyList()}
-        ActionButton("Delete",primary=true,enabled=!state.busy,tag="ConfirmDelete"){state.delete(devices);state.deleteDevices=emptyList()}
-    }) {Label(devices.joinToString { it.displayName });Label("The devices and their saved data will be removed. Running devices will be stopped first. This cannot be undone.",color=JewelTheme.globalColors.text.info)}
-}
 @Composable fun AboutWindow(state:AppState) {
     Sheet("AvdBuddy","AboutWindow",height=560,onClose={state.showAbout=false},footer={Spacer(Modifier.weight(1f));ActionButton("Done",primary=true){state.showAbout=false}}) {
         Label("Android devices. Without the IDE.")
