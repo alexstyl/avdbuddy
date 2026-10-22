@@ -136,21 +136,26 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 Spacer(Modifier.weight(1f))
                 IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
+            val sidebarDevices = state.devices.sortedWith(
+                compareBy<Device> { it.name !in state.running }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.displayName }
+                    .thenBy { it.name }
+            )
             androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) false
                 else if ((event.isMetaPressed || event.isCtrlPressed) && event.key == Key.A) {
-                    state.selected = state.devices.map { it.name }.toSet()
+                    state.selected = sidebarDevices.map { it.name }.toSet()
                     true
                 } else if (event.key == Key.DirectionUp || event.key == Key.DirectionDown) {
-                    val current = state.devices.indexOfFirst { it.name == state.previewDevice?.name }
-                    val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (state.devices.size - 1).coerceAtLeast(0))
-                    state.devices.getOrNull(next)?.let { state.selectDevice(it, extend = event.isShiftPressed) }
+                    val current = sidebarDevices.indexOfFirst { it.name == state.previewDevice?.name }
+                    val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (sidebarDevices.size - 1).coerceAtLeast(0))
+                    sidebarDevices.getOrNull(next)?.let { state.selectDevice(it, extend = event.isShiftPressed, orderedNames = sidebarDevices.map { it.name }) }
                     true
                 } else false
             }, contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                items(state.devices.size, key={state.devices[it].name}) { index ->
+                items(sidebarDevices.size, key={sidebarDevices[it].name}) { index ->
                     Box(Modifier.animateItem()) {
-                        DeviceRow(state.devices[index], state)
+                        DeviceRow(sidebarDevices[index], state, sidebarDevices.map { it.name })
                     }
                 }
             }
@@ -182,7 +187,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
 }
 
-@Composable private fun DeviceRow(device: Device, state: AppState) {
+@Composable private fun DeviceRow(device: Device, state: AppState, orderedNames: List<String>) {
     val selected = device.name in state.selected
     val running = device.name in state.running
     val operation = state.deviceOperations[device.name]
@@ -225,7 +230,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 }
                 .clickable {
                     state.selectDevice(device, toggle = clickModifiers.isMetaPressed || clickModifiers.isCtrlPressed,
-                        extend = clickModifiers.isShiftPressed)
+                        extend = clickModifiers.isShiftPressed, orderedNames = orderedNames)
                     clickModifiers = PointerKeyboardModifiers()
                 }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
