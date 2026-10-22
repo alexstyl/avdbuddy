@@ -17,13 +17,37 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.*
 
 @Composable fun EmulatorPanel(device: Device, state: AppState) {
     val running = device.name in state.running
     val starting = device.name in state.starting && !running
+    if (!running) {
+        Column(
+            Modifier.fillMaxSize().padding(30.dp).testTag("EmulatorPanel"),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(device.type.label.lowercase(), modifier = Modifier.size(48.dp))
+            Spacer(Modifier.height(20.dp))
+            Label(device.displayName,
+                modifier = Modifier.testTag("PreviewDeviceName"))
+            Spacer(Modifier.height(24.dp))
+            ActionButton(if (starting) "Starting…" else "Start", primary = true,
+                enabled = !starting && !state.busy && !device.missingStorage,
+                tag = "Launch-${device.name}") { state.launch(device) }
+            val unavailableReason = when {
+                device.missingStorage -> "Storage unavailable"
+                state.busy && !starting -> "Another device operation is in progress."
+                else -> null
+            }
+            if (unavailableReason != null) {
+                Spacer(Modifier.height(10.dp))
+                Label(unavailableReason, color = JewelTheme.globalColors.text.info)
+            }
+        }
+        return
+    }
     val liveFrame = state.frames[device.directory.absolutePath]
     val frameRotation = state.frameRotations[device.directory.absolutePath] ?: 0
     val request = state.rotations[device.name]?.takeIf { it.serial == state.running[device.name] }
@@ -97,7 +121,7 @@ import androidx.compose.ui.unit.*
                                 state.sendTouch(device, last.first, last.second, false)
                             }
                         }
-                    }.testTag(if(running) "LiveDeviceScreen" else "StoppedDeviceScreen")) {
+                    }.testTag("LiveDeviceScreen")) {
                     if(frame != null) Image(frame, "${device.displayName} screen",
                         Modifier.align(Alignment.Center)
                             .requiredSize(
@@ -106,21 +130,8 @@ import androidx.compose.ui.unit.*
                             )
                             // Undo the stream's orientation inside the physical surface.
                             .graphicsLayer { rotationZ = frameRotation * 90f },
-                        contentScale=ContentScale.FillBounds,
-                        colorFilter=if(running) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }))
-                    if(!running) {
-                        Column(Modifier.align(Alignment.Center).background(JewelTheme.globalColors.panelBackground).padding(12.dp), horizontalAlignment=Alignment.CenterHorizontally) {
-                            org.jetbrains.jewel.ui.component.DefaultButton(onClick={state.launch(device)}, enabled=!starting && !state.busy && !device.missingStorage,
-                                modifier=Modifier.testTag("Launch-${device.name}").semantics { contentDescription="Start ${device.displayName}" }) {
-                                Icon("play")
-                                Spacer(Modifier.width(6.dp))
-                                Label(if(starting) "Starting…" else "Start device")
-                            }
-                            Spacer(Modifier.height(16.dp))
-                            if(device.missingStorage) Label("Storage unavailable")
-                            if(frame == null && !starting) { Spacer(Modifier.height(7.dp)); Label("No saved screen yet", color=JewelTheme.globalColors.text.info) }
-                        }
-                    } else if(frame == null || state.displayErrors[device.name] != null) {
+                        contentScale=ContentScale.FillBounds)
+                    if(frame == null || state.displayErrors[device.name] != null) {
                         Label(state.displayErrors[device.name] ?: "Waiting for the device screen…", Modifier.align(Alignment.Center).padding(20.dp))
                     }
                 }
