@@ -204,7 +204,8 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
     fun launch(device: Device) {
         toolchain.requireReady(); requireAvdStorage()
         require(!device.missingStorage) { "${device.displayName} has unavailable storage. Connect its drive before launching." }
-        val args = mutableListOf("-avd", device.name, "-no-window")
+        val grpcPort = java.net.ServerSocket(0, 0, java.net.InetAddress.getLoopbackAddress()).use { it.localPort }
+        val args = mutableListOf("-avd", device.name, "-no-window", "-gpu", "host", "-grpc", grpcPort.toString(), "-grpc-use-token")
         val skin = device.config["skin.path"]?.let(::File)
         if (device.config["showDeviceFrame"] != "no" && skin?.isDirectory == true) args += listOf("-skindir", skin.parent, "-skin", skin.name)
         command(toolchain.emulator, args, detached = true)
@@ -237,6 +238,8 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         config["avd.ini.displayname"] = spec.name
         config["disk.dataPartition.size"] = "${spec.storage}G"
         config["showDeviceFrame"] = if (spec.frame) "yes" else "no"
+        config["hw.gpu.enabled"] = "yes"
+        config["hw.gpu.mode"] = "host"
         spec.ram?.let { config["hw.ramSize"] = it.toString() }
         val skin = File(toolchain.root, "skins/${spec.profile}")
         if (spec.frame && skin.isDirectory) { config["skin.name"] = spec.profile; config["skin.path"] = skin.path; config["skin.dynamic"] = "yes" }
@@ -257,6 +260,8 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
                 if (file.isDirectory) File(destination, relative).mkdirs() else Files.copy(file.toPath(), File(destination, relative).toPath())
             }
             normalize(destination, device.directory.path, name)
+            val config = File(destination, "config.ini")
+            writeIni(config, readIni(config) + mapOf("hw.gpu.enabled" to "yes", "hw.gpu.mode" to "host"))
             writeIni(File(avdRoot, "$name.ini"), readIni(File(avdRoot, "${device.name}.ini")).minus("path.rel") + ("path" to destination.path))
             return name
         } catch (e: Exception) { destination.deleteRecursively(); File(avdRoot, "$name.ini").delete(); throw e }

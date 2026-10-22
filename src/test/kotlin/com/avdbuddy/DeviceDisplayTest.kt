@@ -48,6 +48,9 @@ class DeviceDisplayTest {
         AndroidService(fake.settings,fake).launch(device)
         val args=fake.commands.single { it.detached }.args
         assertContains(args,"-no-window")
+        assertEquals("host", args[args.indexOf("-gpu") + 1])
+        assertContains(args, "-grpc-use-token")
+        assertTrue(args[args.indexOf("-grpc") + 1].toInt() in 1..65535)
         assertFalse(args.any { it.startsWith("-no-snapshot") || it == "-wipe-data" })
     }
 }

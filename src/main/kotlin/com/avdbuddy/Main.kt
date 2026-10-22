@@ -125,7 +125,7 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
-    Column(Modifier.fillMaxSize().background(Palette.background).testTag("DeviceShelf").onPreviewKeyEvent {
+    Row(Modifier.fillMaxSize().background(Palette.background).testTag("DeviceShelf").onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && (it.isMetaPressed || it.isCtrlPressed)) when(it.key) {
             Key.N -> { if (!state.busy) { state.resetCreate() }; true }
             Key.Comma -> { state.showSettings = true; true }
@@ -133,48 +133,34 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
             else -> false
         } else false
     }) {
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            Column(Modifier.width(270.dp).fillMaxHeight().background(Palette.panel.copy(alpha=.55f)).testTag("DeviceSidebar")) {
-                Spacer(Modifier.height(macTitleInset))
-                Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
-                    Label("Devices", color=Palette.muted, size=12)
-                    Spacer(Modifier.weight(1f))
-                    IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
-                }
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
-                }
-                if(state.running.isNotEmpty()) Box(Modifier.padding(12.dp)) { ActionButton("Stop all", enabled=!state.busy) { state.stopAll() } }
-                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
-                    IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
-                    IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
-                    Spacer(Modifier.weight(1f))
-                    IconButton("info", "About AvdBuddy", "About") { state.showAbout=true }
-                }
+        Column(Modifier.width(270.dp).fillMaxHeight().background(Palette.panel.copy(alpha=.55f)).testTag("DeviceSidebar")) {
+            Spacer(Modifier.height(macTitleInset))
+            Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
+                Label("Devices", color=Palette.muted, size=12)
+                Spacer(Modifier.weight(1f))
+                IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.border))
-            Box(Modifier.weight(1f).fillMaxHeight().padding(top=macTitleInset)) {
-                val device = state.previewDevice
-                if (device != null) EmulatorPanel(device, state)
-                else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {
-                    Icon("phone", modifier=Modifier.size(48.dp))
-                    Spacer(Modifier.height(20.dp)); Label("Your next Android device", size=21, weight=FontWeight.SemiBold)
-                    Spacer(Modifier.height(10.dp)); Label("Create a device to see it here.", color=Palette.muted)
-                    Spacer(Modifier.height(24.dp)); ActionButton("Create a device", primary=true, tag="EmptyCreate") { if(state.ready) state.resetCreate() else state.showSettings=true }
-                }
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f), contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                items(state.devices.size, key={state.devices[it].name}) { DeviceRow(state.devices[it], state) }
+            }
+            if(state.running.isNotEmpty()) Box(Modifier.padding(12.dp)) { ActionButton("Stop all", enabled=!state.busy) { state.stopAll() } }
+            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
+                IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
+                Spacer(Modifier.weight(1f))
+                IconButton("info", "About AvdBuddy", "About") { state.showAbout=true }
             }
         }
-        if(state.status.isNotBlank()) {
-            Rule()
-            Row(Modifier.fillMaxWidth().background(Palette.panel).padding(start=18.dp,end=8.dp,top=4.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically) {
-                Label(state.status,Modifier.weight(1f),if(state.error) Palette.error else Palette.text,maxLines=3,size=12)
-                IconButton("close","Dismiss message") { state.status="" }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.border))
+        Box(Modifier.weight(1f).fillMaxHeight().padding(top=macTitleInset)) {
+            val device = state.previewDevice
+            if (device != null) EmulatorPanel(device, state)
+            else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {
+                Icon("phone", modifier=Modifier.size(48.dp))
+                Spacer(Modifier.height(20.dp)); Label("Your next Android device", size=21, weight=FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp)); Label("Create a device to see it here.", color=Palette.muted)
+                Spacer(Modifier.height(24.dp)); ActionButton("Create a device", primary=true, tag="EmptyCreate") { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
-        }
-        Rule()
-        Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal=20.dp),verticalAlignment=Alignment.CenterVertically) {
-            Label(if(state.busy) "Working…" else "${state.devices.size} device${if(state.devices.size==1) "" else "s"} · ${formatSize(state.totalBytes)}",color=Palette.muted,size=11)
-            Spacer(Modifier.weight(1f)); Label("${state.running.size} running",size=11,color=Palette.muted)
         }
     }
     if(state.showSettings) SettingsWindow(state)

@@ -63,19 +63,19 @@ import com.composeunstyled.UnstyledButton
                     }.focusable().pointerInput(device.name, running, width, height) {
                         if(running) awaitEachGesture {
                             val down = awaitFirstDown(); focus.requestFocus(); down.consume()
-                            val first = screenPoint(down.position.x, down.position.y, size.width, size.height, width, height)
-                            var last = down.position
-                            var elapsed = 0L
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                last = change.position; elapsed = change.uptimeMillis-down.uptimeMillis; change.consume()
-                            } while (event.changes.any { it.pressed })
-                            val end = screenPoint(last.x, last.y, size.width, size.height, width, height)
-                            val moved = (last-down.position).getDistance() > 5
-                            val args = if(moved || elapsed > 400) listOf("swipe",first.first.toString(),first.second.toString(),end.first.toString(),end.second.toString(),elapsed.coerceIn(100,2000).toString())
-                                else listOf("tap",first.first.toString(),first.second.toString())
-                            state.sendInput(device,args)
+                            var last = screenPoint(down.position.x, down.position.y, size.width, size.height, width, height)
+                            state.sendTouch(device, last.first, last.second, true)
+                            try {
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    last = screenPoint(change.position.x, change.position.y, size.width, size.height, width, height)
+                                    change.consume()
+                                    if (change.pressed) state.sendTouch(device, last.first, last.second, true)
+                                } while (event.changes.any { it.pressed })
+                            } finally {
+                                state.sendTouch(device, last.first, last.second, false)
+                            }
                         }
                     }.testTag(if(running) "LiveDeviceScreen" else "StoppedDeviceScreen")) {
                     if(frame != null) Image(frame, "${device.displayName} screen", Modifier.fillMaxSize(), contentScale=ContentScale.FillBounds,
@@ -97,13 +97,6 @@ import com.composeunstyled.UnstyledButton
                     }
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement=Arrangement.Center, verticalAlignment=Alignment.CenterVertically) {
-            if(running) {
-                ActionButton("Back", tag="DeviceBack") { state.sendInput(device,listOf("keyevent","4")) }
-                Spacer(Modifier.width(8.dp)); ActionButton("Home",tag="DeviceHome") { state.sendInput(device,listOf("keyevent","3")) }
-                Spacer(Modifier.width(8.dp)); ActionButton("Recents",tag="DeviceRecents") { state.sendInput(device,listOf("keyevent","187")) }
-            } else Label(if(frame != null) "Last captured screen" else "Select a device, then press play to start it.",color=Palette.muted,size=12)
         }
     }
 }

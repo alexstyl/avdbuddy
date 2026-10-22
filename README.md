@@ -37,7 +37,8 @@ JBR 25, which Jewel requires. Xcode is not required for development.
 - Device sidebar and a large, framed emulator preview
 - Select devices without starting them; stopped previews show the last captured screen in monochrome
 - Central Play button boots/resumes the selected device; new launches run inside the app without a separate emulator window
-- Live color preview with taps, swipes, basic ASCII keyboard input, Back, Home, and Recents
+- Native live screen streaming with immediate touch/drag input and basic ASCII keyboard input
+- Host GPU acceleration for all launches, new devices, and duplicates
 - Right-click or use the device menu for duplicate, rename, delete, and Show in Finder
 - Guided device creation with Android versions on the left and minor/API releases
   on the right, plus downloads, device profiles,
@@ -62,13 +63,21 @@ storage is reported before an install starts.
 
 For command-line diagnostics, run the packaged app executable with `--diagnostics`.
 
-The live view currently uses periodic ADB screen captures, rather than a video stream.
-It is suitable for inspecting and interacting with screens, but animations are not
-full frame rate and multi-touch is not supported. Devices already launched in an
-external emulator window can also be previewed; that existing window stays open.
+The selected device's live view uses the emulator's authenticated gRPC screen stream.
+Raw RGBA frames go directly to Skia, with stale frames dropped instead of queued.
+Touch presses, movement, and releases use the same persistent connection; keyboard
+input still uses ADB. No screenshot subprocesses or PNG writes run per live frame.
+Only the selected device streams. Multi-touch is not supported.
 
-Previews are saved as `.avdbuddy-preview.png` inside each AVD folder, updated while
-running and captured again before stopping through AvdBuddy. A previously saved
+AvdBuddy launches devices with `-gpu host` and a token-protected gRPC endpoint, and
+writes `hw.gpu.enabled=yes` / `hw.gpu.mode=host` for newly created and duplicated
+AVDs. Existing devices also use host rendering when launched through AvdBuddy.
+Devices started by an older AvdBuddy build need to be stopped and started again.
+Externally launched devices require a discovery file with a gRPC port and bearer
+token to stream; otherwise the preview asks for a restart through AvdBuddy.
+
+Previews are saved as `.avdbuddy-preview.png` inside each AVD folder when leaving
+the live view, and captured again before stopping through AvdBuddy. A previously saved
 Quick Boot screenshot is used if available. No screenshot is invented for a device
 that has never been captured. The preview image is separate from Android's Quick
 Boot state: normal emulator snapshot loading/saving remains enabled.

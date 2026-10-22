@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.awt.Desktop
@@ -31,36 +32,52 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     val displayErrors = mutableStateMapOf<String, String>()
     var starting by mutableStateOf(setOf<String>()); private set
     fun selectPreview(device: Device) { previewName = device.name; selected = setOf(device.name) }
-    suspend fun observeDisplays() {
-        val loaded = mutableSetOf<String>()
-        var lastBackground = 0L
-        while (currentCoroutineContext().isActive) {
-            val backendSettings = settings
-            val current = previewDevice
-            val paths = devices.map { it.directory.absolutePath }.toSet()
-            loaded.retainAll(paths)
-            frames.keys.retainAll(paths)
-            devices.forEach { device ->
-                val key = device.directory.absolutePath
-                if (loaded.add(key)) {
-                    val image = withContext(Dispatchers.IO) { display.load(device)?.toComposeImageBitmap() }
-                    if (image != null) frames[key] = image
+    suspend fun observeDisplays(): Unit = coroutineScope {
+        launch {
+            val loaded = mutableSetOf<String>()
+            snapshotFlow { devices.map { it.directory.absolutePath } }.collect { paths ->
+                loaded.retainAll(paths.toSet())
+                frames.keys.retainAll(paths.toSet())
+                devices.forEach { device ->
+                    val key = device.directory.absolutePath
+                    if (loaded.add(key)) {
+                        val image = withContext(Dispatchers.IO) { display.load(device)?.toComposeImageBitmap() }
+                        if (image != null && key !in frames) frames[key] = image
+                    }
                 }
             }
-            val background = System.currentTimeMillis() - lastBackground > 5000
-            if (background) lastBackground = System.currentTimeMillis()
-            val active = running.toMap()
-            devices.filter { it.name in active && (it.name == current?.name || background) }.forEach { device ->
-                val image = withContext(Dispatchers.IO) { runCatching { display.capture(backendSettings, device, active.getValue(device.name))?.toComposeImageBitmap() }.getOrNull() }
-                if (settings == backendSettings) {
-                    if (image != null) { frames[device.directory.absolutePath] = image; displayErrors.remove(device.name) }
-                    else displayErrors[device.name] = "Waiting for the device screen…"
+        }
+        snapshotFlow {
+            val device = previewDevice
+            Triple(settings, device?.directory?.absolutePath, device?.let { running[it.name] })
+        }.collectLatest { (currentSettings, path, serial) ->
+            val device = devices.firstOrNull { it.directory.absolutePath == path } ?: return@collectLatest
+            if (serial == null) return@collectLatest
+            while (isActive) {
+                try {
+                    display.stream(currentSettings, device, serial).collect { image ->
+                        frames[device.directory.absolutePath] = image
+                        displayErrors.remove(device.name)
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    displayErrors[device.name] = e.message ?: "Could not connect to the device screen."
                 }
+                delay(1000)
             }
-            delay(200)
         }
     }
     private val inputMutex = Mutex()
+    fun sendTouch(device: Device, x: Int, y: Int, pressed: Boolean) {
+        val serial = running[device.name] ?: return
+        scope.launch {
+            try { inputMutex.withLock { withContext(Dispatchers.IO) { display.touch(serial, x, y, pressed) } } }
+            catch (e: Exception) {
+                if (e is CancellationException) throw e
+                displayErrors[device.name] = "Could not send touch input. Try restarting the device."
+            }
+        }
+    }
     fun sendInput(device: Device, arguments: List<String>) {
         val serial = running[device.name] ?: return
         val current = settings

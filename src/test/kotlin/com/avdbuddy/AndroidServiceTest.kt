@@ -71,6 +71,8 @@ class AndroidServiceTest {
         assertEquals(File(fake.avds,"Test_Pixel.avd").path,command.args[command.args.indexOf("-p")+1])
         val config=readIni(File(fake.avds,"Test_Pixel.avd/config.ini"))
         assertEquals("4096",config["hw.ramSize"]);assertEquals("32G",config["disk.dataPartition.size"]);assertEquals("no",config["showDeviceFrame"])
+        assertEquals("yes", config["hw.gpu.enabled"])
+        assertEquals("host", config["hw.gpu.mode"])
         assertFalse(Files.isSymbolicLink(File(fake.sdk,"system-images").toPath()))
     }
     @Test fun `broken image link fails before running install`() {
@@ -83,6 +85,8 @@ class AndroidServiceTest {
     @Test fun `duplicate rename and delete preserve original device data`() {
         val fake=FakeAndroid(root);val original=fake.device("Pixel_Original");val service=AndroidService(fake.settings,fake)
         val clone=service.duplicate(original);assertEquals("Pixel_Original_Copy",clone)
+        assertEquals("yes", readIni(File(fake.avds, "$clone.avd/config.ini"))["hw.gpu.enabled"])
+        assertEquals("host", readIni(File(fake.avds, "$clone.avd/config.ini"))["hw.gpu.mode"])
         assertEquals("fixture-data",File(original.directory,"userdata-qemu.img").readText())
         val copy=service.devices().first{it.name==clone};service.rename(copy,"Renamed")
         assertFalse(File(fake.avds,"$clone.ini").exists());assertEquals(File(fake.avds,"Renamed.avd").path,readIni(File(fake.avds,"Renamed.ini"))["path"])

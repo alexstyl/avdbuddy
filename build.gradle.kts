@@ -6,7 +6,9 @@ plugins {
     id("org.jetbrains.compose.hot-reload") version "1.2.0"
     id("dev.nucleusframework") version "2.5.18"
     id("com.composables.kpm") version "0.2.0"
+    id("com.google.protobuf") version "0.10.0"
 }
+protobuf { protoc { artifact = "com.google.protobuf:protoc:3.25.9" } }
 kotlin { jvmToolchain { languageVersion = JavaLanguageVersion.of(25); vendor = JvmVendorSpec.JETBRAINS } }
 
 dependencies {

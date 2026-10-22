@@ -1,5 +1,13 @@
 package com.avdbuddy
 
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toAwtImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
@@ -11,10 +19,27 @@ import javax.imageio.ImageIO
 interface DeviceDisplay {
     fun load(device: Device): BufferedImage?
     fun capture(settings: AppSettings, device: Device, serial: String): BufferedImage?
+    fun stream(settings: AppSettings, device: Device, serial: String): Flow<ImageBitmap>
+    fun touch(serial: String, x: Int, y: Int, pressed: Boolean)
     fun input(settings: AppSettings, serial: String, arguments: List<String>)
 }
 
 class AdbDeviceDisplay : DeviceDisplay {
+    private val live = EmulatorScreenStream()
+    override fun touch(serial: String, x: Int, y: Int, pressed: Boolean) = live.touch(serial, x, y, pressed)
+
+    override fun stream(settings: AppSettings, device: Device, serial: String): Flow<ImageBitmap> = flow {
+        var last: ImageBitmap? = null
+        try {
+            live.frames(device, serial).collect { last = it; emit(it) }
+        } finally {
+            // Save once when leaving the live view, never on the per-frame path.
+            withContext(NonCancellable + Dispatchers.IO) {
+                last?.let { frame -> runCatching { savePreview(device, frame.toAwtImage()) } }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
     override fun load(device: Device): BufferedImage? = runCatching {
         val saved = File(device.directory, ".avdbuddy-preview.png")
         val quickBoot = File(device.directory, "snapshots/default_boot/screenshot.png")
@@ -44,6 +69,15 @@ class AdbDeviceDisplay : DeviceDisplay {
             .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
         try { check(process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0) { "Could not send input to the device." } }
         finally { if (process.isAlive) process.destroyForcibly() }
+    }
+
+    private fun savePreview(device: Device, image: BufferedImage) {
+        if (device.missingStorage) return
+        val temp = File.createTempFile(".avdbuddy-capture-", ".png", device.directory)
+        try {
+            check(ImageIO.write(image, "png", temp))
+            Files.move(temp.toPath(), File(device.directory, ".avdbuddy-preview.png").toPath(), REPLACE_EXISTING, ATOMIC_MOVE)
+        } finally { temp.delete() }
     }
 }
 
