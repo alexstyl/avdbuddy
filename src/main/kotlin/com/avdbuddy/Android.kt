@@ -49,7 +49,7 @@ data class Toolchain(val root: File) {
     private fun tool(name: String): File {
         val dirs = File(root, "cmdline-tools").listFiles()?.filter(File::isDirectory).orEmpty()
         return (listOf(File(root, "cmdline-tools/latest/bin/$name")) + dirs.sortedByDescending { it.name }.map { File(it, "bin/$name") })
-            .firstOrNull { it.canExecute() } ?: File(root, "cmdline-tools/latest/bin/$name")
+            .firstOrNull { it.isFile && it.canExecute() } ?: File(root, "cmdline-tools/latest/bin/$name")
     }
     val sdkmanager get() = tool(host.script("sdkmanager"))
     val avdmanager get() = tool(host.script("avdmanager"))
@@ -220,6 +220,7 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
     fun requireAvdStorage() { require(avdRoot.isDirectory) { "Emulator storage is unavailable at ${avdRoot.path}. Connect its drive or choose another folder in Settings." } }
     fun validateName(name: String) {
         require(Regex("[A-Za-z0-9._-]+").matches(name)) { "Use letters, numbers, dots, underscores, or dashes in the name." }
+        require(!isReservedDeviceName(name)) { "This name is reserved by Windows. Choose a different name." }
         require(!File(avdRoot, "$name.ini").exists() && !Files.exists(File(avdRoot, "$name.avd").toPath(), NOFOLLOW_LINKS)) { "A device named $name already exists." }
     }
     private fun resolveCreationName(spec: CreateSpec): CreateSpec {

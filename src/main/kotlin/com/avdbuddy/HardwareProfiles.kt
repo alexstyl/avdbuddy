@@ -88,7 +88,8 @@ fun googlePlayImages(images: List<SystemImage>, architecture: String = System.ge
 fun creationApiLabel(image: SystemImage): String = image.api.substringBefore("-ext").removeSuffix(".0")
 
 fun availableAvdName(displayName: String, existing: Collection<String>): String {
-    val base = displayName.trim().replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(80).ifBlank { "Pixel" }
+    val candidate = displayName.trim().replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(80).ifBlank { "Pixel" }
+    val base = if (isReservedDeviceName(candidate)) "_$candidate" else candidate
     var name = base
     var suffix = 2
     while (existing.any { it.equals(name, true) }) name = "${base}_${suffix++}"

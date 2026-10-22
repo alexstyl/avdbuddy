@@ -83,4 +83,13 @@ class HostPlatformTest {
         val device = Device("Pixel", root, mapOf("image.sysdir.1" to "system-images\\android-36\\google_apis\\x86_64\\"), 0)
         assertEquals("36", device.api)
     }
+    @Test fun `storage identifiers avoid Windows reserved names on every host`() {
+        for (name in listOf("CON", "nul", "Aux.foo", "COM1", "LPT9")) {
+            assertNotNull(deviceNameError(name, emptyList()))
+            assertEquals("_$name", availableAvdName(name, emptyList()))
+        }
+        assertEquals("Console", availableAvdName("Console", emptyList()))
+        assertNull(deviceNameError("Pixel_10", emptyList()))
+    }
+
 }
