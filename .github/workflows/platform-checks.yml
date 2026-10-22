@@ -1,0 +1,51 @@
+name: Platform checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or commit to validate (blank uses the selected branch)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Headless checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      AVDBUDDY_TEST_INSTALLED_SDK: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install native Android tools (no emulator boot)
+        run: sdkmanager "platform-tools" "emulator"
+      - name: Build and run headless checks
+        if: runner.os != 'Windows'
+        run: ./gradlew --no-daemon --console=plain check assemble platformDiagnostics
+      - name: Build and run headless checks (Windows)
+        if: runner.os == 'Windows'
+        run: .\gradlew.bat --no-daemon --console=plain check assemble platformDiagnostics
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: |
+            build/reports/tests/test/
+            build/test-results/test/
+          if-no-files-found: warn
