@@ -92,6 +92,8 @@ final class EmulatorManager: ObservableObject {
 
     private let runner: CommandRunning
     private let fileManager: FileManager
+    @Published private(set) var avdStoragePath: String
+    private static let avdStorageKey = "avdbuddy.avdStoragePath"
     private let avdRootOverride: URL?
     private let userDefaults: UserDefaults
     private let systemImageCatalogService: AndroidImageCatalogService
@@ -108,6 +110,7 @@ final class EmulatorManager: ObservableObject {
     ) {
         self.runner = runner
         self.fileManager = fileManager
+        self.avdStoragePath = userDefaults.string(forKey: Self.avdStorageKey) ?? Self.defaultAVDStoragePath
         self.avdRootOverride = avdRootOverride
         self.userDefaults = userDefaults
         self.systemImageCatalogService = systemImageCatalogService
@@ -208,6 +211,74 @@ final class EmulatorManager: ObservableObject {
         refreshRunningStates()
     }
 
+    static var defaultAVDStoragePath: String {
+        let environment = ProcessInfo.processInfo.environment
+        if let path = environment["ANDROID_AVD_HOME"], !path.isEmpty { return path }
+        let userHome = environment["ANDROID_EMULATOR_HOME"] ?? environment["ANDROID_USER_HOME"]
+        return userHome.map { URL(fileURLWithPath: $0).appendingPathComponent("avd").path }
+            ?? FileManager().homeDirectoryForCurrentUser.appendingPathComponent(".android/avd").path
+    }
+
+    /// Switches libraries without moving or rewriting existing devices.
+    @discardableResult
+    func updateAVDStoragePath(_ path: String) -> Bool {
+        guard !isBusy, deletingEmulatorNames.isEmpty else {
+            statusMessage = "Wait for the current operation to finish before changing storage."
+            return false
+        }
+        let expanded = (path.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        guard expanded.hasPrefix("/") else {
+            statusMessage = "Choose an absolute emulator storage path."
+            return false
+        }
+        let url = URL(fileURLWithPath: expanded).standardizedFileURL
+        if url.path == avdStoragePath { return true }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue,
+              fileManager.isWritableFile(atPath: url.path) else {
+            statusMessage = "Choose an available, writable folder. Connect the drive if it is external."
+            return false
+        }
+        avdStoragePath = url.path
+        userDefaults.set(url.path, forKey: Self.avdStorageKey)
+        refreshEmulators()
+        statusMessage = "Emulator storage updated."
+        return true
+    }
+
+    var systemImagesStoragePath: String {
+        let url = URL(fileURLWithPath: toolchainStatus.sdkPath).appendingPathComponent("system-images")
+        if let target = try? fileManager.destinationOfSymbolicLink(atPath: url.path) {
+            return URL(fileURLWithPath: target, relativeTo: url.deletingLastPathComponent()).standardizedFileURL.path
+        }
+        return url.path
+    }
+
+    var systemImagesStorageAvailable: Bool {
+        fileManager.fileExists(atPath: systemImagesStoragePath)
+    }
+
+    func finderURL(for emulator: EmulatorInstance) -> URL? {
+        emulator.finderURL(in: avdRootURL, fileManager: fileManager)
+    }
+
+    var avdStorageAvailable: Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: avdRootURL.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    private func requireAvailableAVDStorage(createDefaultIfNeeded: Bool = false) throws {
+        let localDefault = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".android/avd")
+        if createDefaultIfNeeded, avdRootURL.standardizedFileURL == localDefault.standardizedFileURL,
+           !fileManager.fileExists(atPath: avdRootURL.path) {
+            try fileManager.createDirectory(at: avdRootURL, withIntermediateDirectories: true)
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: avdRootURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw AndroidToolchainError.notConfigured("Emulator storage is unavailable at \(avdRootURL.path). Connect the drive or choose another folder in Settings.")
+        }
+    }
+
     func clearStatusMessage() {
         statusMessage = ""
     }
@@ -302,6 +373,7 @@ final class EmulatorManager: ObservableObject {
 
         do {
             let runner = self.runner
+            try requireAvailableAVDStorage(createDefaultIfNeeded: true)
             let toolchain = try requireToolchain(for: "Creating an AVD")
             let avdRootURL = self.avdRootURL
             let output = try await Task.detached(priority: .userInitiated) {
@@ -342,6 +414,7 @@ final class EmulatorManager: ObservableObject {
         }
 
         do {
+            try requireAvailableAVDStorage(createDefaultIfNeeded: true)
             let toolchain = try requireToolchain(for: "Creating an AVD")
             let avdRootURL = self.avdRootURL
             let streamingRunner = self.runner
@@ -369,6 +442,7 @@ final class EmulatorManager: ObservableObject {
                 return .success(output)
             }
 
+            isBusy = false
             let fallback = await createAVDWithDebugOutput(from: configuration)
             if fallback.didCreate {
                 onOutput(fallback.output)
@@ -432,10 +506,12 @@ final class EmulatorManager: ObservableObject {
         do {
             let avdName = emulator.name
             let runner = self.runner
+            try requireAvailableAVDStorage()
+            let avdRootURL = self.avdRootURL
             let toolchain = try requireToolchain(for: "Deleting an AVD")
 
             try await Task.detached(priority: .userInitiated) {
-                try Self.deleteEmulator(named: avdName, runner: runner, toolchain: toolchain)
+                try Self.deleteEmulator(named: avdName, runner: runner, toolchain: toolchain, avdRootURL: avdRootURL)
             }.value
 
             refreshEmulators()
@@ -540,6 +616,7 @@ final class EmulatorManager: ObservableObject {
     }
 
     private func duplicateEmulator(named avdName: String) throws -> String {
+        try requireAvailableAVDStorage()
         let duplicatedName = nextAvailableDuplicateName(for: avdName)
         let sourceDirectory = avdDirectoryURL(for: avdName)
         let destinationDirectory = avdDirectoryURL(for: duplicatedName)
@@ -558,6 +635,7 @@ final class EmulatorManager: ObservableObject {
     }
 
     private func renameEmulator(from oldName: String, to newName: String) throws {
+        try requireAvailableAVDStorage()
         let sourceDirectory = avdDirectoryURL(for: oldName)
         let destinationDirectory = avdDirectoryURL(for: newName)
         let sourceIniURL = avdRootURL.appendingPathComponent("\(oldName).ini")
@@ -577,12 +655,34 @@ final class EmulatorManager: ObservableObject {
         }
     }
 
+    private nonisolated static func prepareSystemImageStorage(sdkRootPath: String) throws {
+        let fileManager = FileManager()
+        let imagesURL = URL(fileURLWithPath: sdkRootPath).appendingPathComponent("system-images")
+        if let target = try? fileManager.destinationOfSymbolicLink(atPath: imagesURL.path),
+           !fileManager.fileExists(atPath: imagesURL.path) {
+            throw AndroidToolchainError.notConfigured(
+                "System image storage points to an unavailable folder (\(target)). Connect that drive or choose an SDK with available storage in Settings."
+            )
+        }
+        if !fileManager.fileExists(atPath: imagesURL.path) {
+            try fileManager.createDirectory(at: imagesURL, withIntermediateDirectories: false)
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: imagesURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue, fileManager.isWritableFile(atPath: imagesURL.path) else {
+            throw AndroidToolchainError.notConfigured(
+                "System image storage is not a writable folder at \(imagesURL.path). Choose an SDK with writable storage in Settings."
+            )
+        }
+    }
+
     private nonisolated static func createEmulator(
         configuration: CreateAVDResolvedConfiguration,
         runner: any CommandRunning,
         toolchain: AndroidToolchain,
         avdRootURL: URL
     ) throws -> String {
+        try prepareSystemImageStorage(sdkRootPath: toolchain.sdkPath)
         let sdkManager = toolchain.sdkManager
         let avdManager = toolchain.avdManager
 
@@ -605,7 +705,8 @@ final class EmulatorManager: ObservableObject {
         let createResult = try runner.run(Command(
             executable: avdManager,
             arguments: createArguments,
-            stdin: "no\n"
+            stdin: "no\n",
+            environment: ["ANDROID_AVD_HOME": avdRootURL.path]
         ))
 
         let configURL = avdRootURL
@@ -632,6 +733,7 @@ final class EmulatorManager: ObservableObject {
         cancellationFlag: CancellationFlag,
         onOutput: @escaping @Sendable (String) -> Void
     ) throws -> String {
+        try prepareSystemImageStorage(sdkRootPath: toolchain.sdkPath)
         let sdkManager = toolchain.sdkManager
         let avdManager = toolchain.avdManager
 
@@ -673,7 +775,8 @@ final class EmulatorManager: ObservableObject {
             Command(
                 executable: avdManager,
                 arguments: createArguments,
-                stdin: "no\n"
+                stdin: "no\n",
+                environment: ["ANDROID_AVD_HOME": avdRootURL.path]
             ),
             onOutput: { chunk in
                 onOutput(chunk)
@@ -708,7 +811,7 @@ final class EmulatorManager: ObservableObject {
             .map(String.init) ?? []
 
         replaceOrAppendLine(prefix: "path=", with: "path=\(absolutePath)", in: &lines)
-        replaceOrAppendLine(prefix: "path.rel=", with: "path.rel=avd/\(avdName).avd", in: &lines)
+        lines.removeAll { $0.hasPrefix("path.rel=") }
 
         try (lines.joined(separator: "\n") + "\n").write(to: iniURL, atomically: true, encoding: .utf8)
     }
@@ -813,6 +916,7 @@ final class EmulatorManager: ObservableObject {
     }
 
     private func launchEmulator(named avdName: String) throws {
+        try requireAvailableAVDStorage()
         let toolchain = try requireToolchain(for: "Launching an emulator")
         let emulatorBinary = toolchain.emulator
         var arguments = ["-avd", avdName]
@@ -824,7 +928,8 @@ final class EmulatorManager: ObservableObject {
         _ = try runner.run(Command(
             executable: emulatorBinary,
             arguments: arguments,
-            waitForExit: false
+            waitForExit: false,
+            environment: ["ANDROID_AVD_HOME": avdRootURL.path]
         ))
     }
 
@@ -837,11 +942,12 @@ final class EmulatorManager: ObservableObject {
         return true
     }
 
-    private nonisolated static func deleteEmulator(named avdName: String, runner: any CommandRunning, toolchain: AndroidToolchain) throws {
+    private nonisolated static func deleteEmulator(named avdName: String, runner: any CommandRunning, toolchain: AndroidToolchain, avdRootURL: URL) throws {
         let avdManager = toolchain.avdManager
         _ = try runner.run(Command(
             executable: avdManager,
-            arguments: ["delete", "avd", "-n", avdName]
+            arguments: ["delete", "avd", "-n", avdName],
+            environment: ["ANDROID_AVD_HOME": avdRootURL.path]
         ))
     }
 
@@ -975,9 +1081,7 @@ final class EmulatorManager: ObservableObject {
         if let avdRootOverride {
             return avdRootOverride
         }
-        return fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent(".android")
-            .appendingPathComponent("avd")
+        return URL(fileURLWithPath: avdStoragePath)
     }
 
     private func resolvedToolchain() -> AndroidToolchain {

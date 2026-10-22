@@ -1,11 +1,7 @@
 import Foundation
 
 extension EmulatorInstance {
-    var finderURL: URL? {
-        let fileManager = FileManager()
-        let avdRoot = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent(".android")
-            .appendingPathComponent("avd")
+    func finderURL(in avdRoot: URL, fileManager: FileManager = FileManager()) -> URL? {
 
         let directoryURL = avdRoot.appendingPathComponent("\(name).avd")
         if fileManager.fileExists(atPath: directoryURL.path) {

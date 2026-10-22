@@ -3,6 +3,91 @@ import Testing
 @testable import AvdBuddy
 
 struct EmulatorManagerTests {
+    @Test(arguments: [false, true]) @MainActor
+    func unavailableSystemImageLinkBlocksInstallWithoutChangingLink(streaming: Bool) async throws {
+        let sdkRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: sdkRoot) }
+        try createSDKToolchainFixture(at: sdkRoot)
+        let avdRoot = try temporaryAVDRoot()
+        defer { try? FileManager().removeItem(at: avdRoot.deletingLastPathComponent()) }
+        let images = sdkRoot.appendingPathComponent("system-images")
+        let offlineTarget = sdkRoot.appendingPathComponent("disconnected-drive/images").path
+        try FileManager().createSymbolicLink(atPath: images.path, withDestinationPath: offlineTarget)
+        let baseRunner = MockRunner()
+        let manager = EmulatorManager(runner: streaming ? MockStreamingRunner(base: baseRunner) : baseRunner,
+                                      sdkPath: sdkRoot.path, avdRootOverride: avdRoot)
+        let configuration = CreateAVDResolvedConfiguration(
+            packagePath: "system-images;android-36;google_apis_playstore;arm64-v8a",
+            avdName: "Local_Pixel", deviceProfileID: "pixel_9", ramMB: nil,
+            storage: "16GB", sdCard: nil, showDeviceFrame: true, colorSeed: "123456")
+        if streaming {
+            _ = await manager.createAVDStreaming(from: configuration, onOutput: { _ in })
+        } else {
+            #expect(await manager.createAVD(from: configuration) == false)
+        }
+        #expect(manager.statusMessage.contains("System image storage points to an unavailable folder"))
+        #expect(baseRunner.commands.isEmpty)
+        #expect(try FileManager().destinationOfSymbolicLink(atPath: images.path) == offlineTarget)
+        #expect(!FileManager().fileExists(atPath: offlineTarget))
+    }
+
+    @Test @MainActor
+    func storageSelectionPersistsAndSwitchesLibrary() throws {
+        let root = try temporaryAVDRoot()
+        defer { try? FileManager().removeItem(at: root.deletingLastPathComponent()) }
+        try createAVDFixture(named: "External_Pixel", at: root, target: "android-35")
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = EmulatorManager(runner: MockRunner(), userDefaults: defaults)
+        #expect(manager.updateAVDStoragePath(root.path))
+        #expect(manager.emulators.map(\.name) == ["External_Pixel"])
+        #expect(manager.finderURL(for: manager.emulators[0]) == root.appendingPathComponent("External_Pixel.avd"))
+        let reopened = EmulatorManager(runner: MockRunner(), userDefaults: defaults)
+        reopened.refreshEmulators()
+        #expect(reopened.avdStoragePath == root.path)
+        #expect(reopened.emulators.map(\.name) == ["External_Pixel"])
+
+        #expect(!manager.updateAVDStoragePath(root.appendingPathComponent("unmounted").path))
+        #expect(manager.avdStoragePath == root.path)
+        manager.isBusy = true
+        #expect(!manager.updateAVDStoragePath(root.deletingLastPathComponent().path))
+        #expect(manager.avdStoragePath == root.path)
+    }
+
+    @Test @MainActor
+    func customStorageIsPassedToLaunchAndDeleteAndMissingStorageBlocksLaunch() async throws {
+        let root = try temporaryAVDRoot()
+        defer { try? FileManager().removeItem(at: root.deletingLastPathComponent()) }
+        let sdkRoot = try temporarySDKRoot()
+        defer { try? FileManager().removeItem(at: sdkRoot) }
+        try createSDKToolchainFixture(at: sdkRoot)
+        try createAVDFixture(named: "External_Pixel", at: root, target: "android-35")
+        let runner = MockRunner()
+        let manager = EmulatorManager(runner: runner, sdkPath: sdkRoot.path, avdRootOverride: root)
+        manager.refreshEmulators()
+        let device = try #require(manager.emulators.first)
+        await manager.launch(device)
+        let launch = try #require(runner.commands.first { !$0.waitForExit })
+        #expect(launch.environment["ANDROID_AVD_HOME"] == root.path)
+        await manager.delete(device)
+        let delete = try #require(runner.commands.first { $0.arguments.starts(with: ["delete", "avd"]) })
+        #expect(delete.environment["ANDROID_AVD_HOME"] == root.path)
+        try FileManager().removeItem(at: root)
+        let launchCount = runner.commands.filter { !$0.waitForExit }.count
+        await manager.launch(device)
+        #expect(runner.commands.filter { !$0.waitForExit }.count == launchCount)
+        #expect(manager.statusMessage.contains("storage is unavailable"))
+    }
+
+    @Test
+    func commandRunnerPassesEnvironmentInBothModes() throws {
+        let command = Command(executable: "/usr/bin/printenv", arguments: ["ANDROID_AVD_HOME"], environment: ["ANDROID_AVD_HOME": "/Volumes/Test SSD/avd"])
+        let runner = ProcessCommandRunner()
+        #expect(try runner.run(command).stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "/Volumes/Test SSD/avd")
+        #expect(try runner.runStreaming(command, onOutput: { _ in }, shouldCancel: { false }).stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "/Volumes/Test SSD/avd")
+    }
+
     @Test @MainActor
     func loadsSystemImagesFromSDKManagerList() async throws {
         let sdkRoot = try temporarySDKRoot()
@@ -89,8 +174,8 @@ struct EmulatorManagerTests {
         }
     }
 
-    @Test @MainActor
-    func createsResolvedAVDUsingSelectedSystemImageAndWritesConfig() async throws {
+    @Test(arguments: [0, 1, 2]) @MainActor
+    func createsResolvedAVDUsingSelectedSystemImageAndWritesConfig(mode: Int) async throws {
         let tempDirectory = try temporaryAVDRoot()
         defer { try? FileManager().removeItem(at: tempDirectory.deletingLastPathComponent()) }
         let sdkRoot = try temporarySDKRoot()
@@ -130,7 +215,7 @@ struct EmulatorManagerTests {
         }
 
         let manager = EmulatorManager(
-            runner: runner,
+            runner: mode == 2 ? MockStreamingRunner(base: runner) : runner,
             fileManager: FileManager(),
             sdkPath: sdkRoot.path,
             avdRootOverride: tempDirectory
@@ -146,10 +231,20 @@ struct EmulatorManagerTests {
             showDeviceFrame: true,
             colorSeed: "abcdef123456"
         )
-        let didCreate = await manager.createAVD(from: configuration)
+        let didCreate: Bool
+        if mode == 0 {
+            didCreate = await manager.createAVD(from: configuration)
+        } else {
+            let result = await manager.createAVDStreaming(from: configuration, onOutput: { _ in })
+            if case .success = result { didCreate = true } else { didCreate = false }
+        }
 
         #expect(didCreate)
+        let imagesURL = sdkRoot.appendingPathComponent("system-images")
+        #expect(FileManager().fileExists(atPath: imagesURL.path))
+        #expect((try imagesURL.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink == false)
         #expect(runner.commands.count == 2)
+        #expect(runner.commands[1].environment["ANDROID_AVD_HOME"] == tempDirectory.path)
         #expect(runner.commands[0].executable == "\(sdkRoot.path)/cmdline-tools/latest/bin/sdkmanager")
         #expect(runner.commands[0].arguments == ["--install", "system-images;android-36;google_apis_playstore;arm64-v8a"])
         #expect(runner.commands[1].arguments == [
@@ -938,7 +1033,7 @@ struct EmulatorManagerTests {
         #expect(FileManager().fileExists(atPath: duplicatedDirectory.path))
 
         let duplicatedINIContents = try String(contentsOf: duplicatedINI)
-        #expect(duplicatedINIContents.contains("path.rel=avd/Pixel_API_24_Copy.avd"))
+        #expect(!duplicatedINIContents.contains("path.rel="))
         #expect(duplicatedINIContents.contains("target=android-24"))
 
         let duplicatedConfigContents = try String(contentsOf: duplicatedDirectory.appendingPathComponent("config.ini"))
@@ -995,7 +1090,7 @@ struct EmulatorManagerTests {
         #expect(FileManager().fileExists(atPath: renamedDirectory.path))
 
         let renamedINIContents = try String(contentsOf: renamedINI)
-        #expect(renamedINIContents.contains("path.rel=avd/Pixel_API_24_Renamed.avd"))
+        #expect(!renamedINIContents.contains("path.rel="))
         #expect(renamedINIContents.contains("target=android-24"))
         #expect(manager.lastRenamedEmulatorName == "Pixel_API_24_Renamed")
     }
@@ -1065,5 +1160,17 @@ final class MockRunner: CommandRunning, @unchecked Sendable {
             return handler(command)
         }
         return CommandResult(exitCode: 0, stdout: "", stderr: "")
+    }
+}
+
+private final class MockStreamingRunner: StreamingCommandRunning, @unchecked Sendable {
+    let base: MockRunner
+    init(base: MockRunner) { self.base = base }
+    func run(_ command: Command) throws -> CommandResult { try base.run(command) }
+    func runStreaming(_ command: Command, onOutput: @escaping @Sendable (String) -> Void,
+                      shouldCancel: @escaping @Sendable () -> Bool) throws -> CommandResult {
+        let result = try base.run(command)
+        onOutput(result.stdout)
+        return result
     }
 }

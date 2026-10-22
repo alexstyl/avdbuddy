@@ -37,8 +37,18 @@ It looks for the SDK in:
 - `ANDROID_HOME`
 - `~/Library/Android/sdk`
 
-It reads AVDs from:
-- `~/.android/avd`
+AVD storage defaults to `~/.android/avd` (or your Android environment override).
+Use the toolbar's Settings button to choose a different emulator storage folder,
+including a folder on an external SSD. The selection is remembered and used for
+browsing, creating, launching, duplicating, renaming, deleting, and revealing devices
+in Finder. Switching folders does not move existing devices or change Android Studio's
+settings. Select a folder containing the `.ini` and `.avd` files, or create an empty
+folder using Browse to store new devices there.
+
+System images are managed separately under the selected SDK's `system-images`
+folder. Settings shows their actual location, including symlink destinations, and
+flags unavailable storage. Changing the AVD folder does not relocate system images.
+External storage must be connected before using devices or images stored there.
 
 ## Installation
 
@@ -70,7 +80,7 @@ Homebrew installs `AvdBuddy.app` into `/Applications`.
 Run the test suite:
 
 ```bash
-swift test
+xcodebuild -project AvdBuddy.xcodeproj -scheme AvdBuddy -destination 'platform=macOS' test
 ```
 
 Run the project with the provided macOS script. It builds the `AvdBuddy` scheme in `Debug` and launches the app:

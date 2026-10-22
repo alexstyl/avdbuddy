@@ -83,6 +83,9 @@ struct ContentView: View {
                 manager.refreshRunningStates()
             }
         }
+        .onChange(of: manager.avdStoragePath) { _ in
+            selectedEmulatorIDs.removeAll()
+        }
         .onChange(of: manager.lastCreatedEmulatorName) { newValue in
             guard let newValue else { return }
             selectedEmulatorIDs = [newValue]
@@ -134,7 +137,7 @@ struct ContentView: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
         }
-        .help("Android SDK Settings")
+        .help("Settings")
     }
 
     private var toolbarInfoButton: some View {
@@ -213,14 +216,20 @@ struct ContentView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("No devices yet")
+            Text(manager.avdStorageAvailable ? "No devices yet" : "Emulator storage unavailable")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
-            Text("Create your first Android Virtual Device to start building your shelf.")
+            Text(manager.avdStorageAvailable
+                 ? "Create your first Android Virtual Device to start building your shelf."
+                 : "Connect the drive at \(manager.avdStoragePath), or choose another folder in Settings.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Button("Create AVD") {
-                presentCreateFlow()
+            Button(manager.avdStorageAvailable ? "Create AVD" : "Open Settings") {
+                if manager.avdStorageAvailable {
+                    presentCreateFlow()
+                } else {
+                    isPresentingSDKSetup = true
+                }
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 16)
@@ -362,7 +371,7 @@ struct ContentView: View {
                 isDestructive: false,
                 isEnabled: true,
                 handler: {
-                    if let finderURL = emulator.finderURL {
+                    if let finderURL = manager.finderURL(for: emulator) {
                         NSWorkspace.shared.activateFileViewerSelecting([finderURL])
                     } else {
                         manager.statusMessage = "Could not locate \(emulator.name) in Finder."

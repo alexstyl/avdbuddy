@@ -5,17 +5,20 @@ struct Command {
     let arguments: [String]
     let stdin: String?
     let waitForExit: Bool
+    let environment: [String: String]
 
     init(
         executable: String,
         arguments: [String],
         stdin: String? = nil,
-        waitForExit: Bool = true
+        waitForExit: Bool = true,
+        environment: [String: String] = [:]
     ) {
         self.executable = executable
         self.arguments = arguments
         self.stdin = stdin
         self.waitForExit = waitForExit
+        self.environment = environment
     }
 }
 
@@ -59,6 +62,7 @@ final class ProcessCommandRunner: StreamingCommandRunning, @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: command.executable)
         process.arguments = command.arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(command.environment) { _, value in value }
 
         let outputPipe: Pipe?
         let errorPipe: Pipe?
@@ -118,6 +122,7 @@ final class ProcessCommandRunner: StreamingCommandRunning, @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: command.executable)
         process.arguments = command.arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(command.environment) { _, value in value }
 
         let outputPipe = Pipe()
         let errorPipe = Pipe()

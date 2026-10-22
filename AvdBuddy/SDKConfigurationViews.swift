@@ -63,20 +63,30 @@ struct AndroidSDKSetupSheet: View {
     @ObservedObject var manager: EmulatorManager
     @Environment(\.dismiss) private var dismiss
     @State private var sdkPath: String
+    @State private var avdPath: String
+    @State private var storageError: String?
 
     init(manager: EmulatorManager) {
         self.manager = manager
         _sdkPath = State(initialValue: manager.toolchainStatus.sdkPath)
+        _avdPath = State(initialValue: manager.avdStoragePath)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             header
-            pathEditor
-            if validationStatus.unsupportedTools.contains(where: { [.sdkManager, .avdManager].contains($0.tool) }) {
-                deprecatedToolsWarning
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    pathEditor
+                    Divider()
+                    storageEditor
+                    if validationStatus.unsupportedTools.contains(where: { [.sdkManager, .avdManager].contains($0.tool) }) {
+                        deprecatedToolsWarning
+                    }
+                    validationList
+                }
             }
-            validationList
+            .frame(maxHeight: 520)
             footer
         }
         .padding(24)
@@ -85,7 +95,7 @@ struct AndroidSDKSetupSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(manager.isToolchainConfigured ? "Android SDK Settings" : "Set Up Android SDK")
+            Text(manager.isToolchainConfigured ? "Settings" : "Set Up Android SDK")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
 
             Text("AvdBuddy uses your Android SDK to load Android versions, create AVDs, and launch emulators.")
@@ -97,6 +107,56 @@ struct AndroidSDKSetupSheet: View {
                     sdkPath = detected
                 }
                 .buttonStyle(.link)
+            }
+        }
+    }
+
+    private var storageEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Emulator Storage Location")
+                .font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 10) {
+                TextField("Emulator folder", text: $avdPath)
+                    .textFieldStyle(.roundedBorder)
+                Button("Browse...") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false
+                    panel.canCreateDirectories = true
+                    panel.prompt = "Select Storage"
+                    panel.directoryURL = URL(fileURLWithPath: (avdPath as NSString).expandingTildeInPath)
+                    if panel.runModal() == .OK, let url = panel.url {
+                        avdPath = url.path
+                        storageError = nil
+                    }
+                }
+            }
+            Button("Use Default") {
+                avdPath = EmulatorManager.defaultAVDStoragePath
+                storageError = nil
+            }
+            .buttonStyle(.link)
+            Text("Choose the folder containing your .ini and .avd files. New devices will be stored here. Existing devices stay in their current location. This setting applies to AvdBuddy only.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let storageError {
+                Text(storageError)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Android System Images")
+                    .font(.system(size: 12, weight: .medium))
+                Text(manager.systemImagesStoragePath)
+                    .font(.system(size: 11))
+                    .textSelection(.enabled)
+                Text(manager.systemImagesStorageAvailable
+                     ? "System images are managed separately by the selected Android SDK."
+                     : "System images are unavailable. Connect the drive if they are stored externally, or install images in an available SDK.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(manager.systemImagesStorageAvailable ? Color.secondary : Color.orange)
             }
         }
     }
@@ -190,14 +250,18 @@ struct AndroidSDKSetupSheet: View {
             }
 
             Button(manager.isToolchainConfigured ? "Save" : "Continue") {
+                guard manager.updateAVDStoragePath(avdPath) else {
+                    storageError = manager.statusMessage
+                    return
+                }
                 manager.updateSDKPath(sdkPath)
                 if manager.isToolchainConfigured {
-                    manager.statusMessage = "Android SDK updated."
+                    manager.statusMessage = "Settings saved."
                     dismiss()
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!validationStatus.isConfigured)
+            .disabled(!validationStatus.isConfigured || manager.isBusy || !manager.deletingEmulatorNames.isEmpty)
         }
     }
 
@@ -236,7 +300,7 @@ struct AndroidSDKSetupSheet: View {
     }
 
     private func refreshValidation() {
-        manager.updateSDKPath(sdkPath)
+        sdkPath = sdkPath.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func openCommandLineToolsInstructions() {
