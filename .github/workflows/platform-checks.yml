@@ -32,8 +32,9 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - uses: android-actions/setup-android@v3
-      - name: Install native Android tools (no emulator boot)
-        run: sdkmanager "platform-tools" "emulator"
+        with:
+          packages: 'platform-tools emulator'
+          log-accepted-android-sdk-licenses: false
       - name: Build and run headless checks
         if: runner.os != 'Windows'
         run: ./gradlew --no-daemon --console=plain check assemble platformDiagnostics
