@@ -18,3 +18,5 @@ SOUL.md
 .kotlin/
 build/
 .idea/
+
+__pycache__/

@@ -9,7 +9,6 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-const val APP_VERSION = "1.0.0"
 val userHome: File get() = File(System.getProperty("user.home"))
 
 data class AppSettings(val sdk: String, val avds: String)
@@ -374,7 +373,9 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
         listOf("hardware-qemu.ini", "multiinstance.lock", "read-snapshot.txt", "emu-launch-params.txt", "tmpAdbCmds").forEach { File(directory, it).deleteRecursively() }
     }
     fun diagnostics() = buildString {
-        appendLine("AvdBuddy $APP_VERSION · Kotlin ${KotlinVersion.CURRENT}")
+        appendLine("$APP_NAME $APP_VERSION · Kotlin ${KotlinVersion.CURRENT}")
+        appendLine("Channel: ${appBuild.channel}")
+        appendLine("Self-updates: ${if (appBuild.isNightly) "disabled" else "stable"}")
         appendLine("${System.getProperty("os.name")} ${System.getProperty("os.version")} · ${System.getProperty("os.arch")}")
         appendLine("SDK: ${toolchain.root}\nAVDs: $avdRoot")
         toolchain.tools.forEach { (name, file) -> appendLine("$name: ${if(file.canExecute()) "available" else "missing"} ($file)") }

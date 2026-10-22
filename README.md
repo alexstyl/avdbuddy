@@ -141,9 +141,8 @@ These checks validate backend behavior, native Skia frame decoding, gRPC streami
 file operations, process cancellation, and native SDK invocation. They do not
 validate desktop rendering, actual accelerated emulator boot, or interactions with
 a desktop file manager; those still need interactive checks on each OS before a
-release. The workflow does not publish or package a release. Self-updates currently
-remain available only in installed macOS builds; Windows/Linux distribution and
-updates are deferred.
+release. Normal manual checks do not publish a release. Nightly runs also package and
+publish the installers described below.
 
 Only backend tests run automatically. They use temporary SDK/AVD fixtures and run
 headlessly, without opening windows or clicking through the app.
@@ -167,6 +166,38 @@ spectre detach <session-id>
 Interactive actions operate on the actual running app and its real devices.
 The last attach check encountered a Spectre session error; interactive attachment
 still needs troubleshooting.
+
+## Nightly downloads
+
+Each successful nightly publishes a dated GitHub **prerelease** with installers
+for macOS Apple Silicon and Intel (DMG + ZIP), Windows x64 (installer EXE + ZIP),
+and Linux x64 (DEB + AppImage + ZIP). Java is bundled; an Android SDK is still
+required. Download from [GitHub Releases](https://github.com/alexstyl/avdbuddy/releases).
+The release notes include installation instructions and SHA-256 checksums.
+These are unsigned development builds; macOS Gatekeeper or Windows SmartScreen
+may require manual approval.
+
+Nightlies install as **AvdBuddy-Nightly**, with a separate bundle/package identity
+and preferences folder. They share the Android SDK and AVD storage with stable
+and Android Studio; device changes affect those same devices.
+
+Nightlies never check for or install updates, automatically or manually. To update,
+download another nightly. Stable releases retain their existing update behavior:
+nightly releases are marked prerelease and `make_latest=false`, contain no
+`latest*.yml` or Sparkle `appcast.xml`, and omit the stable Sparkle feed from the
+macOS bundle. The packaging tool cannot publish releases itself; only the final
+workflow job can publish, after every platform passes.
+
+To build a nightly immediately, run **Platform checks** on `main` and enable the
+**nightly** checkbox, or run:
+
+```bash
+gh workflow run platform-checks.yml --ref main -f nightly=true
+```
+
+Branch runs can build downloadable workflow artifacts with that checkbox, but
+only `main` can publish a nightly release. Installers are checked with their real
+packaged launcher in headless diagnostics mode; no app windows or emulators boot.
 
 ## Packaging
 

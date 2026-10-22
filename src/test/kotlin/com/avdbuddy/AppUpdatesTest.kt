@@ -14,11 +14,22 @@ import org.junit.jupiter.api.Test
 
 class AppUpdatesTest {
     @Test fun `development and brew installs cannot self update`() {
-        assertNotNull(updateInstallation(null, false))
-        assertNotNull(updateInstallation(File("/project/build/AvdBuddy.app"), false))
-        assertTrue(updateInstallation(File("/Applications/AvdBuddy.app"), true)!!.contains("brew upgrade"))
-        assertNull(updateInstallation(File("/Applications/AvdBuddy.app"), false))
+        assertNotNull(updateInstallation(null, false, nightly = false))
+        assertNotNull(updateInstallation(File("/project/build/AvdBuddy.app"), false, nightly = false))
+        assertTrue(updateInstallation(File("/Applications/AvdBuddy.app"), true, nightly = false)!!.contains("brew upgrade"))
+        assertNull(updateInstallation(File("/Applications/AvdBuddy.app"), false, nightly = false))
         assertEquals(File("/Applications/AvdBuddy.app"), appBundle(File("/Applications/AvdBuddy.app/Contents/runtime/Contents/Home")))
+    }
+
+    @Test fun `nightly installations can never self update`() {
+        for (bundle in listOf(null, File("/Applications/AvdBuddy-Nightly.app"))) {
+            for (brew in listOf(false, true)) {
+                assertContains(updateInstallation(bundle, brew, nightly = true)!!, "do not check for or install updates")
+            }
+        }
+        assertNotEquals(BuildIdentity("stable", "1.0.0").settingsDirectoryName,
+            BuildIdentity("nightly", "1.0.0-nightly.test").settingsDirectoryName)
+        assertEquals("AvdBuddy Nightly", BuildIdentity("nightly", "1.0.0-nightly.test").appName)
     }
 
     @Test fun `Nucleus discovers downloads and verifies update checksum`(): Unit = runBlocking {

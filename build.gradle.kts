@@ -1,4 +1,5 @@
 import dev.nucleusframework.desktop.application.dsl.TargetFormat
+import dev.nucleusframework.desktop.application.dsl.PublishMode
 plugins {
     kotlin("jvm") version "2.4.0"
     kotlin("plugin.compose") version "2.4.0"
@@ -8,6 +9,18 @@ plugins {
     id("com.composables.kpm") version "0.2.0"
     id("com.google.protobuf") version "0.10.0"
 }
+val nightlyBuild = providers.gradleProperty("nightlyBuild").map(String::toBoolean).getOrElse(false)
+val nightlyBuildNumber = providers.gradleProperty("nightlyBuildNumber").getOrElse("0")
+val buildVersion = if (nightlyBuild) providers.gradleProperty("nightlyVersion").getOrElse("1.0.0-nightly.local") else "1.0.0"
+val buildChannel = if (nightlyBuild) "nightly" else "stable"
+tasks.processResources {
+    inputs.property("buildChannel", buildChannel)
+    inputs.property("buildVersion", buildVersion)
+    filesMatching("avdbuddy-build.properties") {
+        expand("buildChannel" to buildChannel, "buildVersion" to buildVersion)
+    }
+}
+
 protobuf { protoc { artifact = "com.google.protobuf:protoc:3.25.9" } }
 kotlin { jvmToolchain { languageVersion = JavaLanguageVersion.of(25); vendor = JvmVendorSpec.JETBRAINS } }
 
@@ -43,27 +56,47 @@ nucleus {
             jvmArgs += listOf("-Dapple.awt.application.name=AvdBuddy", "-Dapple.awt.application.appearance=NSAppearanceNameAqua")
         }
         nativeDistributions {
-            targetFormats(TargetFormat.Zip)
-            if (System.getProperty("os.name").startsWith("Mac")) targetFormats(TargetFormat.Dmg)
-            packageName = "AvdBuddy"
-            packageVersion = "1.0.0"
+            targetFormats(*when {
+                System.getProperty("os.name").startsWith("Mac") -> arrayOf(TargetFormat.Dmg, TargetFormat.Zip)
+                nightlyBuild && System.getProperty("os.name").startsWith("Windows") -> arrayOf(TargetFormat.Nsis, TargetFormat.Zip)
+                nightlyBuild -> arrayOf(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Zip)
+                else -> arrayOf(TargetFormat.Zip)
+            })
+            packageName = if (nightlyBuild) "AvdBuddy-Nightly" else "AvdBuddy"
+            packageVersion = if (nightlyBuild) "1.0.$nightlyBuildNumber" else "1.0.0"
+            homepage = "https://github.com/alexstyl/avdbuddy"
+            if (nightlyBuild) artifactName = "AvdBuddy-Nightly-$buildVersion-\${os}-\${arch}.\${ext}"
+            windows {
+                if (nightlyBuild) {
+                    upgradeUuid = "cbbfaefb-0277-46f2-8352-d76324d6067a"
+                    nsis { oneClick = false; allowToChangeInstallationDirectory = true; runAfterFinish = false }
+                }
+            }
+            linux {
+                packageName = if (nightlyBuild) "avdbuddy-nightly" else "avdbuddy"
+                appCategory = "Development"
+                debMaintainer = "Alex Styl"
+            }
             description = "Android Virtual Device manager"
             vendor = "Alex Styl"
             modules("java.net.http", "java.prefs", "java.xml", "jdk.unsupported")
-            publish { github { enabled = true; owner = "alexstyl"; repo = "avdbuddy" } }
+            publish {
+                publishMode = PublishMode.Never
+                github { enabled = !nightlyBuild; owner = "alexstyl"; repo = "avdbuddy" }
+            }
             macOS {
-                bundleID = "com.alexstyl.avdbuddy"
+                bundleID = if (nightlyBuild) "com.alexstyl.avdbuddy.nightly" else "com.alexstyl.avdbuddy"
                 iconFile.set(project.file("packaging/app-icon.icns"))
                 minimumSystemVersion = "12.0"
-                packageBuildVersion = "1000"
+                packageBuildVersion = if (nightlyBuild) nightlyBuildNumber else "1000"
                 infoPlist {
-                    extraKeysRawXml = """
+                    extraKeysRawXml = if (nightlyBuild) "" else """
                         <key>SUFeedURL</key><string>https://github.com/alexstyl/avdbuddy/releases/latest/download/appcast.xml</string>
                         <key>SUPublicEDKey</key><string>98Ak6s+hDcV8aKiNMVieV8LTncbT9SuYuhWoFo4WNkI=</string>
                     """.trimIndent()
                 }
                 // Credentials are read only for an explicitly requested signed release build.
-                if (providers.gradleProperty("signedRelease").orNull == "true") {
+                if (!nightlyBuild && providers.gradleProperty("signedRelease").orNull == "true") {
                     signing { sign.set(true); identity.set(providers.environmentVariable("RELEASE_SIGN_IDENTITY")) }
                     notarization { keychainProfile.set(providers.environmentVariable("NOTARY_KEYCHAIN_PROFILE")) }
                 }

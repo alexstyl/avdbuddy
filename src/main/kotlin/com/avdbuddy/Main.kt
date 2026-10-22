@@ -50,7 +50,7 @@ fun main(args: Array<String>) {
         val state = remember { AppState(scope) }
         Window(
             onCloseRequest = ::exitApplication,
-            title = "AvdBuddy",
+            title = APP_NAME,
             state = rememberWindowState(width = 1040.dp, height = 720.dp),
             onPreviewKeyEvent = { event -> handleMainWindowShortcut(event, state) },
         ) {

@@ -10,7 +10,8 @@ import java.util.Properties
 internal fun appBundle(javaHome: File = File(System.getProperty("java.home"))): File? =
     generateSequence(javaHome) { it.parentFile }.firstOrNull { it.extension == "app" }
 
-internal fun updateInstallation(bundle: File?, homebrewReceipt: Boolean): String? = when {
+internal fun updateInstallation(bundle: File?, homebrewReceipt: Boolean, nightly: Boolean = appBuild.isNightly): String? = when {
+    nightly -> "Nightly builds do not check for or install updates. Download a newer nightly from GitHub Releases."
     bundle == null || generateSequence(bundle) { it.parentFile }.any { it.name == "build" } -> "Updates are available in installed builds of AvdBuddy."
     homebrewReceipt -> "Installed with Homebrew. Update with: brew upgrade --cask avdbuddy"
     else -> null
@@ -59,6 +60,7 @@ class AppUpdates(private val scope: CoroutineScope) {
         }
     }
     fun download() {
+        if (unavailableReason != null) return
         val info = available ?: return
         if (working) return
         working = true

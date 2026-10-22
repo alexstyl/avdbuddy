@@ -22,12 +22,14 @@ internal class HostPlatform(
     private val linuxUid: String? = if (os == HostOs.LINUX) runCatching {
         Files.getAttribute(File("/proc/self").toPath(), "unix:uid").toString()
     }.getOrNull() else null,
+    private val build: BuildIdentity = appBuild,
 ) {
     fun env(name: String): String? = environment[name]?.takeIf(String::isNotBlank)
+    private val settingsName get() = build.settingsDirectoryName
     val configDirectory: File get() = when (os) {
-        HostOs.MAC -> File(home, "Library/Application Support/AvdBuddy")
-        HostOs.WINDOWS -> File(env("APPDATA")?.let(::File) ?: File(home, "AppData/Roaming"), "AvdBuddy")
-        HostOs.LINUX -> File(env("XDG_CONFIG_HOME")?.let(::File)?.takeIf(File::isAbsolute) ?: File(home, ".config"), "AvdBuddy")
+        HostOs.MAC -> File(home, "Library/Application Support/$settingsName")
+        HostOs.WINDOWS -> File(env("APPDATA")?.let(::File) ?: File(home, "AppData/Roaming"), settingsName)
+        HostOs.LINUX -> File(env("XDG_CONFIG_HOME")?.let(::File)?.takeIf(File::isAbsolute) ?: File(home, ".config"), settingsName)
     }
     val defaultSdk: File get() = (env("ANDROID_HOME") ?: env("ANDROID_SDK_ROOT"))?.let(::File) ?: when (os) {
         HostOs.MAC -> File(home, "Library/Android/sdk")
