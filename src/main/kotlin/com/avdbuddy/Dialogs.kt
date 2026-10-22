@@ -2,21 +2,20 @@ package com.avdbuddy
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.*
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
-import com.composeunstyled.UnstyledButton
 import org.jetbrains.jewel.ui.component.CheckboxRow
 import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.OutlinedButton
+import org.jetbrains.jewel.ui.component.RadioButtonRow
 import java.awt.Desktop
 import java.io.File
 import java.net.URI
@@ -26,8 +25,8 @@ import java.net.URI
     LaunchedEffect(width,height) { windowState.size = DpSize(width.dp,height.dp) }
     Window(onCloseRequest=onClose,title=title,state=windowState,resizable=false) {
         AvdBuddyTheme {
-            Column(Modifier.fillMaxSize().background(Palette.background).testTag(tag)) {
-                Column(Modifier.padding(start=24.dp,end=24.dp,top=22.dp,bottom=18.dp)) { Label(title,size=22,weight=FontWeight.SemiBold) }
+            Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).testTag(tag)) {
+                Column(Modifier.padding(start=24.dp,end=24.dp,top=22.dp,bottom=18.dp)) { Label(title) }
                 Rule()
                 Box(Modifier.weight(1f).testTag("$tag-Content")) {
                     if (scrollableContent) {
@@ -39,7 +38,7 @@ import java.net.URI
                     }
                 }
                 Rule()
-                Row(Modifier.fillMaxWidth().testTag("$tag-Footer").background(Palette.toolbar.copy(alpha=.55f)).padding(horizontal=20.dp,vertical=14.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically,content=footer)
+                Row(Modifier.fillMaxWidth().testTag("$tag-Footer").background(JewelTheme.globalColors.panelBackground).padding(horizontal=20.dp,vertical=14.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically,content=footer)
             }
         }
     }
@@ -56,32 +55,32 @@ import java.net.URI
         Spacer(Modifier.weight(1f));ActionButton("Cancel",tag="CancelSettings"){state.showSettings=false}
         ActionButton("Save",primary=true,enabled=!state.busy,tag="SaveSettings"){failure=state.saveSettings(sdkField.text.toString(),avdField.text.toString())}
     }) {
-        Label("Android tools and device storage, in one place.",color=Palette.muted)
+        Label("Android tools and device storage, in one place.",color=JewelTheme.globalColors.text.info)
         Section("Android SDK","folder") {
-            Label("SDK location",size=12,color=Palette.muted,modifier=Modifier.testTag("SdkLocationLabel"))
+            Label("SDK location",color=JewelTheme.globalColors.text.info,modifier=Modifier.testTag("SdkLocationLabel"))
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                 Field(sdkField,"SdkPath",Modifier.weight(1f))
                 ActionButton("Browse…",tag="BrowseSdk"){chooseDirectory(sdk)?.let{sdkField.setTextAndPlaceCursorAtEnd(it)}}
             }
-            UnstyledButton({expanded=!expanded},modifier=Modifier.fillMaxWidth().testTag("ToggleToolValidation")) {
+            OutlinedButton({expanded=!expanded},modifier=Modifier.fillMaxWidth().testTag("ToggleToolValidation")) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).background(if(tools.ready)Palette.green else Palette.error,RoundedCornerShape(6.dp)))
-                    Spacer(Modifier.width(8.dp));Label(if(tools.ready) "All four Android tools found" else "Android tools are missing",size=12,color=if(tools.ready)Palette.muted else Palette.error)
-                    Spacer(Modifier.weight(1f));Label(if(expanded) "⌃" else "⌄",color=Palette.muted)
+                    Icon(if(tools.ready) "check" else "close")
+                    Spacer(Modifier.width(8.dp));Label(if(tools.ready) "All four Android tools found" else "Android tools are missing",color=if(tools.ready)JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.error)
+                    Spacer(Modifier.weight(1f));Label(if(expanded) "⌃" else "⌄",color=JewelTheme.globalColors.text.info)
                 }
             }
             if(expanded) tools.tools.forEach { (name,file) -> Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Icon(if(file.canExecute())"check" else "close",if(file.canExecute())Palette.green else Palette.error,Modifier.size(13.dp))
-                Spacer(Modifier.width(8.dp));Column { Label(name,size=12);Label(file.path,size=10,color=Palette.muted,maxLines=2) }
+                Icon(if(file.canExecute())"check" else "close",if(file.canExecute())JewelTheme.contentColor else JewelTheme.globalColors.text.error,Modifier.size(13.dp))
+                Spacer(Modifier.width(8.dp));Column { Label(name);Label(file.path,color=JewelTheme.globalColors.text.info,maxLines=2) }
             } }
         }
         Section("Emulator storage","disk") {
-            Label("Device location",size=12,color=Palette.muted,modifier=Modifier.testTag("AvdLocationLabel"))
+            Label("Device location",color=JewelTheme.globalColors.text.info,modifier=Modifier.testTag("AvdLocationLabel"))
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                 Field(avdField,"AvdPath",Modifier.weight(1f))
                 ActionButton("Browse…",tag="BrowseAvds"){chooseDirectory(avds)?.let{avdField.setTextAndPlaceCursorAtEnd(it)}}
             }
-            Label("New devices are stored here. Switching folders leaves existing devices in place and applies to AvdBuddy only.",size=12,color=Palette.muted)
+            Label("New devices are stored here. Switching folders leaves existing devices in place and applies to AvdBuddy only.",color=JewelTheme.globalColors.text.info)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 ActionButton("Use default",tag="DefaultAvdPath"){avdField.setTextAndPlaceCursorAtEnd(defaultAvdHome())}
                 ActionButton("New folder…",tag="NewAvdFolder"){
@@ -95,10 +94,10 @@ import java.net.URI
         }
         val images=File(expandPath(sdk),"system-images")
         Section("Android system images","download") {
-            SelectionContainer { Label(images.canonicalPath,size=12,color=Palette.muted) }
-            Label(if(images.isDirectory)"Managed by the Android SDK, separately from device storage." else if(java.nio.file.Files.isSymbolicLink(images.toPath())) "This location points to an unavailable drive. Connect it before downloading." else "This folder will be created when you download your first image.",size=12,color=if(java.nio.file.Files.isSymbolicLink(images.toPath())&&!images.exists())Palette.error else Palette.muted)
+            SelectionContainer { Label(images.canonicalPath,color=JewelTheme.globalColors.text.info) }
+            Label(if(images.isDirectory)"Managed by the Android SDK, separately from device storage." else if(java.nio.file.Files.isSymbolicLink(images.toPath())) "This location points to an unavailable drive. Connect it before downloading." else "This folder will be created when you download your first image.",color=if(java.nio.file.Files.isSymbolicLink(images.toPath())&&!images.exists())JewelTheme.globalColors.text.error else JewelTheme.globalColors.text.info)
         }
-        failure?.let{Label(it,color=Palette.error,size=12,modifier=Modifier.testTag("SettingsError"))}
+        failure?.let{Label(it,color=JewelTheme.globalColors.text.error,modifier=Modifier.testTag("SettingsError"))}
     }
 }
 
@@ -140,7 +139,7 @@ import java.net.URI
         contentPadding=if(step==1 && !showProgress) PaddingValues(start=24.dp,end=24.dp,top=20.dp) else PaddingValues(24.dp),
         onClose={if(state.creating) {closeRequested=true;state.cancelCreate()} else state.showCreate=false},footer={
         if(!showProgress) {
-            if(step==3 && reviewPlan?.canCreate==false) Label("Not enough disk space",size=12,color=Palette.error)
+            if(step==3 && reviewPlan?.canCreate==false) Label("Not enough disk space",color=JewelTheme.globalColors.text.error)
             Spacer(Modifier.weight(1f))
             ActionButton("Cancel",tag="CancelCreate"){state.showCreate=false}
             if(step>0)ActionButton("Previous",tag="PreviousCreate"){step--}
@@ -152,46 +151,45 @@ import java.net.URI
                 }
             }
         } else {
-            if(state.creating) {Label(if(state.createCancelling) "Cancelling…" else "Installed Android images are kept if you cancel.",size=12,color=Palette.muted);Spacer(Modifier.weight(1f));ActionButton("Cancel creation",enabled=!state.createCancelling,tag="CancelDownload"){state.cancelCreate()} }
+            if(state.creating) {Label(if(state.createCancelling) "Cancelling…" else "Installed Android images are kept if you cancel.",color=JewelTheme.globalColors.text.info);Spacer(Modifier.weight(1f));ActionButton("Cancel creation",enabled=!state.createCancelling,tag="CancelDownload"){state.cancelCreate()} }
             else {Spacer(Modifier.weight(1f));if(state.createError.isNotBlank())ActionButton("Back",tag="BackFromError"){showProgress=false};ActionButton("Done",primary=true,tag="CreateDone"){state.showCreate=false}}
         }
     }) {
         if(showProgress) {
             if(state.createFinished) {
-                Box(Modifier.fillMaxWidth().padding(vertical=12.dp),contentAlignment=Alignment.Center){Icon("check",Palette.green,Modifier.size(44.dp))}
-                Label("$name is ready. Select it in the device list and press Play to start it.",size=15)
+                Box(Modifier.fillMaxWidth().padding(vertical=12.dp),contentAlignment=Alignment.Center){Icon("check",JewelTheme.contentColor,Modifier.size(44.dp))}
+                Label("$name is ready. Select it in the device list and press Play to start it.")
             } else if(state.creating) {
-                Label(if(state.createCancelling) "Cancelling device creation…" else "Preparing Android and creating your device…",color=Palette.muted)
+                Label(if(state.createCancelling) "Cancelling device creation…" else "Preparing Android and creating your device…",color=JewelTheme.globalColors.text.info)
             }
-            if(state.createError.isNotBlank()) SelectionContainer { Label(state.createError,color=Palette.error,modifier=Modifier.testTag("CreateError"),size=12) }
+            if(state.createError.isNotBlank()) SelectionContainer { Label(state.createError,color=JewelTheme.globalColors.text.error,modifier=Modifier.testTag("CreateError")) }
             ActivityLog(output, Modifier.weight(1f))
 
         } else when(step) {
             0 -> {
-                Label("Pick the kind of Android device you want to run.",color=Palette.muted)
+                Label("Pick the kind of Android device you want to run.",color=JewelTheme.globalColors.text.info)
                 DeviceType.entries.chunked(2).forEach { row -> Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { row.forEach { option ->
                     val selected=type==option
-                    UnstyledButton({type=option;profile=option.profile;chosen=null},modifier=Modifier.weight(1f).testTag("Type-${option.name}").height(84.dp).background(if(selected) Palette.accent.copy(alpha=.1f) else Palette.panel,RoundedCornerShape(9.dp)).border(1.dp,if(selected)Palette.accent else Palette.border,RoundedCornerShape(9.dp))) {
+                    RadioButtonRow(selected=selected, onClick={type=option;profile=option.profile;chosen=null}, modifier=Modifier.weight(1f).testTag("Type-${option.name}")) {
                         Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically) {
-                            Icon(option.label.lowercase(),if(selected)Palette.accent else Palette.muted,Modifier.size(25.dp));Spacer(Modifier.width(13.dp));Label(option.label,weight=FontWeight.Medium)
-                            Spacer(Modifier.weight(1f));if(selected)Icon("check",Palette.accent,Modifier.size(15.dp))
+                            Icon(option.label.lowercase());Spacer(Modifier.width(13.dp));Label(option.label)
                         }
                     }
                 } } }
             }
             1 -> {
-                if(state.catalogLoading)Row(horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically){org.jetbrains.jewel.ui.component.CircularProgressIndicator();Label("Loading Android versions…",color=Palette.muted)}
-                if(state.catalogError.isNotBlank()) {Label(state.catalogError,color=Palette.error,size=12);ActionButton("Try again"){state.loadCatalog()}}
+                if(state.catalogLoading)Row(horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=Alignment.CenterVertically){org.jetbrains.jewel.ui.component.CircularProgressIndicator();Label("Loading Android versions…",color=JewelTheme.globalColors.text.info)}
+                if(state.catalogError.isNotBlank()) {Label(state.catalogError,color=JewelTheme.globalColors.text.error);ActionButton("Try again"){state.loadCatalog()}}
                 if (!state.catalogLoading && state.catalogError.isBlank()) {
                     AndroidImagePicker(state.images,type,chosen,onSelect={chosen=it})
                 }
             }
             2 -> {
                 Section("Identity","phone") {
-                    Label("Device name",color=Palette.muted,size=12)
+                    Label("Device name",color=JewelTheme.globalColors.text.info)
                     Field(nameField,"DeviceName",Modifier.fillMaxWidth())
-                    Label(nameIssue ?: "Use letters, numbers, dots, underscores or hyphens.",color=if(nameIssue!=null) Palette.error else Palette.muted,size=12)
-                    Label(chosen?.title.orEmpty(),color=Palette.muted,size=12)
+                    Label(nameIssue ?: "Use letters, numbers, dots, underscores or hyphens.",color=if(nameIssue!=null) JewelTheme.globalColors.text.error else JewelTheme.globalColors.text.info)
+                    Label(chosen?.title.orEmpty(),color=JewelTheme.globalColors.text.info)
                 }
                 Section("General","settings") {
                     val profileOptions=(state.profiles.filter { it.id==profile || when(type) {
@@ -211,10 +209,10 @@ import java.net.URI
                 Section("Storage","disk") {
                     FormRow("Internal storage"){Select(storage,listOf(8,16,32,64),{storage=it},{"$it GiB"},"InternalStorage")}
                     FormRow("SD card"){Select(sd,listOf(0,2,4,8),{sd=it},{if(it==0)"None" else "$it GiB"},"SdCard")}
-                    Label("Device files will be stored in ${state.settings.avds}",size=11,color=Palette.muted)
+                    Label("Device files will be stored in ${state.settings.avds}",color=JewelTheme.globalColors.text.info)
                 }
                 Section("Android image","download") {
-                    Label(chosen?.description.orEmpty(),size=12)
+                    Label(chosen?.description.orEmpty())
                     val releaseImages = state.images.filter { type.accepts(it.tag) && it.api == chosen?.api }
                     FormRow("Architecture") {
                         Select(chosen?.abi.orEmpty(), releaseImages.map { it.abi }.distinct(), { abi ->
@@ -228,15 +226,15 @@ import java.net.URI
                             chosen = preferredSystemImage(options.filter { it.tag == tag })
                         }, { tag -> options.firstOrNull { it.tag == tag }?.services.orEmpty() }, "GoogleServices")
                     }
-                    Label(if(chosen?.installed==true)"This system image is already installed." else "The Android SDK will download this image before creating your device.",color=Palette.muted,size=11)
+                    Label(if(chosen?.installed==true)"This system image is already installed." else "The Android SDK will download this image before creating your device.",color=JewelTheme.globalColors.text.info)
                 }
             }
             3 -> {
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(18.dp)) {
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(18.dp)) {
                         Section("Device", "phone") {
-                            FormRow("Name") { Label(name,weight=FontWeight.Medium) }
-                            Label("${androidFamilyTitle(chosen?.api.orEmpty())} · ${androidApiSubtitle(chosen?.api.orEmpty())}",size=12)
+                            FormRow("Name") { Label(name) }
+                            Label("${androidFamilyTitle(chosen?.api.orEmpty())} · ${androidApiSubtitle(chosen?.api.orEmpty())}")
                             FormRow("Profile") { Label("${type.label} · ${state.profiles.firstOrNull{it.id==profile}?.name ?: profile}") }
                             FormRow("Image") { Label("${chosen?.abi} · ${chosen?.services}") }
                             FormRow("Memory / Frame") { Label("${if(ram=="Default") "Default memory" else "$ram GB"} · ${if(frame) "Shown" else "Hidden"}") }
@@ -244,38 +242,38 @@ import java.net.URI
                         Section("Device data", "disk") {
                             FormRow("Internal storage capacity") { Label("$storage GiB") }
                             FormRow("SD card capacity") { Label(if(sd==0) "None" else "$sd GiB") }
-                            Label("Device data grows as you use it. We budget its full capacity plus 1 GiB for cache, snapshots and configuration; this is not the amount allocated immediately.",size=11,color=Palette.muted)
-                            Label(state.settings.avds,size=11,color=Palette.muted)
+                            Label("Device data grows as you use it. We budget its full capacity plus 1 GiB for cache, snapshots and configuration; this is not the amount allocated immediately.",color=JewelTheme.globalColors.text.info)
+                            Label(state.settings.avds,color=JewelTheme.globalColors.text.info)
                         }
                     }
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(18.dp)) {
                         Section("Android image", "download") {
                             Label(if(chosen?.installed==true) "Already downloaded — no image download needed." else "This image will be downloaded before your device is created.",
-                                color=if(chosen?.installed==true) Palette.green else Palette.text,modifier=Modifier.testTag("ReviewImageStatus"))
+                                color=if(chosen?.installed==true) JewelTheme.contentColor else Color.Unspecified,modifier=Modifier.testTag("ReviewImageStatus"))
                             reviewPlan?.let { plan ->
                                 if(chosen?.installed!=true) {
                                     FormRow("Download") { Label(storageSize(plan.image.download)) }
                                     FormRow("Unpacked image") { Label(storageSize(plan.image.unpacked)) }
-                                    Label("The download and unpacked files need space at the same time during installation. The installed image can be shared with other devices.",size=11,color=Palette.muted)
-                                } else Label("The existing shared image takes no additional installation space.",size=11,color=Palette.muted)
+                                    Label("The download and unpacked files need space at the same time during installation. The installed image can be shared with other devices.",color=JewelTheme.globalColors.text.info)
+                                } else Label("The existing shared image takes no additional installation space.",color=JewelTheme.globalColors.text.info)
                             }
                         }
                         Section("Space required", "disk") {
-                            if(reviewPlan==null && reviewError.isBlank()) Label("Checking image size and available disk space…",color=Palette.muted,modifier=Modifier.testTag("ReviewStorageLoading"))
+                            if(reviewPlan==null && reviewError.isBlank()) Label("Checking image size and available disk space…",color=JewelTheme.globalColors.text.info,modifier=Modifier.testTag("ReviewStorageLoading"))
                             if(reviewError.isNotBlank()) {
-                                Label(reviewError,color=Palette.error,modifier=Modifier.testTag("ReviewStorageError"))
+                                Label(reviewError,color=JewelTheme.globalColors.text.error,modifier=Modifier.testTag("ReviewStorageError"))
                                 ActionButton("Retry storage check",tag="RetryStorageCheck") { reviewAttempt++ }
                             }
                             reviewPlan?.let { plan ->
-                                FormRow("Space needed during creation") { Label(storageSize(plan.required),weight=FontWeight.SemiBold) }
+                                FormRow("Space needed during creation") { Label(storageSize(plan.required)) }
                                 plan.disks.forEach { disk ->
-                                    Label(disk.location,weight=FontWeight.Medium)
-                                    Label("${storageSize(disk.required)} required · ${storageSize(disk.available)} available",size=12,color=if(disk.enough) Palette.muted else Palette.error)
-                                    Label(disk.path,size=10,color=Palette.muted)
+                                    Label(disk.location)
+                                    Label("${storageSize(disk.required)} required · ${storageSize(disk.available)} available",color=if(disk.enough) JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.error)
+                                    Label(disk.path,color=JewelTheme.globalColors.text.info)
                                 }
                                 Label(if(plan.canCreate) "Enough disk space is available to create this device." else "Not enough available disk space to create this device. Free space or choose another storage location in Settings.",
-                                    color=if(plan.canCreate) Palette.green else Palette.error,modifier=Modifier.testTag("ReviewSpaceStatus"))
-                                if(chosen?.installed!=true) Label("Includes 1 GiB of installation workspace in addition to the image and device data budgets.",size=11,color=Palette.muted)
+                                    color=if(plan.canCreate) JewelTheme.contentColor else JewelTheme.globalColors.text.error,modifier=Modifier.testTag("ReviewSpaceStatus"))
+                                if(chosen?.installed!=true) Label("Includes 1 GiB of installation workspace in addition to the image and device data budgets.",color=JewelTheme.globalColors.text.info)
                                 ActionButton("Refresh available space",tag="RefreshReviewSpace") { reviewAttempt++ }
                             }
                         }
@@ -292,17 +290,16 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
     val scroll = rememberScrollState()
     val horizontal = rememberScrollState()
     LaunchedEffect(output, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
-    Column(modifier.fillMaxWidth().background(Palette.panel, RoundedCornerShape(8.dp))
-        .border(1.dp, Palette.border, RoundedCornerShape(8.dp)).testTag("ActivityPanel")) {
+    Column(modifier.fillMaxWidth().testTag("ActivityPanel")) {
         Row(Modifier.padding(14.dp), verticalAlignment=Alignment.CenterVertically) {
-            Icon("download", modifier=Modifier.size(15.dp));Spacer(Modifier.width(9.dp));Label("Activity",weight=FontWeight.Medium)
+            Icon("download", modifier=Modifier.size(15.dp));Spacer(Modifier.width(9.dp));Label("Activity")
         }
         Rule()
         Box(Modifier.weight(1f).fillMaxWidth()) {
             SelectionContainer(Modifier.fillMaxSize().padding(end=12.dp,bottom=12.dp)) {
                 Text(output.ifBlank { "Preparing Android tools…" },
                     Modifier.fillMaxSize().testTag("CreateOutput").verticalScroll(scroll).horizontalScroll(horizontal).padding(14.dp),
-                    fontFamily=FontFamily.Monospace,fontSize=11.sp,color=Palette.muted,softWrap=false)
+                    style=JewelTheme.consoleTextStyle,softWrap=false)
             }
             VerticalScrollbar(rememberScrollbarAdapter(scroll),Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(bottom=12.dp))
             HorizontalScrollbar(rememberScrollbarAdapter(horizontal),Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(end=12.dp))
@@ -323,11 +320,11 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
             state.rename(device,nameField.text.toString()) { error -> if(error==null)state.renameDevice=null else failure=error }
         }
     }) {
-        Label("Give ${device.displayName} a new name.",color=Palette.muted)
+        Label("Give ${device.displayName} a new name.",color=JewelTheme.globalColors.text.info)
         Field(nameField,"RenameName",Modifier.fillMaxWidth())
         val hint = when { state.busy -> "Renaming device… This window will close when finished."; running -> "Stop this device before renaming it."; issue!=null -> issue; name==device.name -> "Enter a different name to rename this device."; else -> "Use letters, numbers, dots, underscores or hyphens." }
-        Label(hint,color=if(running||issue!=null) Palette.error else Palette.muted,size=12)
-        failure?.let { Label(it,color=Palette.error,size=12) }
+        Label(hint,color=if(running||issue!=null) JewelTheme.globalColors.text.error else JewelTheme.globalColors.text.info)
+        failure?.let { Label(it,color=JewelTheme.globalColors.text.error) }
     }
 }
 @Composable fun DeleteWindow(state:AppState) {
@@ -335,23 +332,23 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
     Sheet("Delete ${if(devices.size==1)"device" else "${devices.size} devices"}?","DeleteWindow",height=310,onClose={state.deleteDevices=emptyList()},footer={
         Spacer(Modifier.weight(1f));ActionButton("Cancel",tag="CancelDelete"){state.deleteDevices=emptyList()}
         ActionButton("Delete",primary=true,enabled=!state.busy,tag="ConfirmDelete"){state.delete(devices);state.deleteDevices=emptyList()}
-    }) {Label(devices.joinToString { it.displayName },weight=FontWeight.Medium);Label("The devices and their saved data will be removed. Running devices will be stopped first. This cannot be undone.",color=Palette.muted)}
+    }) {Label(devices.joinToString { it.displayName });Label("The devices and their saved data will be removed. Running devices will be stopped first. This cannot be undone.",color=JewelTheme.globalColors.text.info)}
 }
 @Composable fun AboutWindow(state:AppState) {
     Sheet("AvdBuddy","AboutWindow",height=560,onClose={state.showAbout=false},footer={Spacer(Modifier.weight(1f));ActionButton("Done",primary=true){state.showAbout=false}}) {
-        Label("Android devices. Without the IDE.",size=17,weight=FontWeight.Medium)
-        Label("Version $APP_VERSION",color=Palette.muted)
-        Label("Built with Kotlin, Compose Desktop, Jewel, and Compose Unstyled.",color=Palette.muted)
+        Label("Android devices. Without the IDE.")
+        Label("Version $APP_VERSION",color=JewelTheme.globalColors.text.info)
+        Label("Built with Kotlin, Compose Desktop, and Jewel.",color=JewelTheme.globalColors.text.info)
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {ActionButton("GitHub"){Desktop.getDesktop().browse(URI("https://github.com/alexstyl/avdbuddy"))};ActionButton("Check for updates",enabled=!state.busy){state.checkUpdates()}}
         Section("Using your devices", "phone") {
-            Label("Select a device in the sidebar to preview it. Selection never starts the emulator.",size=12)
-            Label("Press Play to start it. A gray screen is the last captured preview; the running screen appears in color.",size=12)
-            Label("Use Settings to reconnect an unavailable SDK or device folder. Changing folders leaves existing devices in place.",size=12)
-            Label("Shortcuts: ⌘N creates a device. ⌘, opens Settings. ⌘⌫ asks to delete the selected device.",size=11,color=Palette.muted)
-            Label("While running: ⌘→ rotates clockwise. ⌘← rotates counterclockwise.",size=11,color=Palette.muted)
+            Label("Select a device in the sidebar to preview it. Selection never starts the emulator.")
+            Label("Press Play to start it. A gray screen is the last captured preview; the running screen appears in color.")
+            Label("Use Settings to reconnect an unavailable SDK or device folder. Changing folders leaves existing devices in place.")
+            Label("Shortcuts: ⌘N creates a device. ⌘, opens Settings. ⌘⌫ asks to delete the selected device.",color=JewelTheme.globalColors.text.info)
+            Label("While running: ⌘→ rotates clockwise. ⌘← rotates counterclockwise.",color=JewelTheme.globalColors.text.info)
         }
         ActionButton("Copy diagnostics",tag="CopyDiagnostics"){state.copyDiagnostics()}
-        Label("By Alex Styl · Inspired by VirtualBuddy",color=Palette.muted,size=12)
+        Label("By Alex Styl · Inspired by VirtualBuddy",color=JewelTheme.globalColors.text.info)
     }
 }
 
@@ -367,7 +364,7 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
         }
     }) {
         Label(updates.message, modifier=Modifier.testTag("UpdateStatus"))
-        if (updates.downloaded != null && state.busy) Label("Finish the current device operation before restarting.", color=Palette.muted)
+        if (updates.downloaded != null && state.busy) Label("Finish the current device operation before restarting.", color=JewelTheme.globalColors.text.info)
         if (updates.unavailableReason == null) CheckboxRow(checked=updates.automatic, onCheckedChange=updates::changeAutomatic) { Label("Automatically check for updates") }
     }
 }

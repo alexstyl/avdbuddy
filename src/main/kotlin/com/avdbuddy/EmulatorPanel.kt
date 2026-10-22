@@ -6,11 +6,10 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.key.*
@@ -20,9 +19,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
-import com.composeunstyled.UnstyledButton
 
 @Composable fun EmulatorPanel(device: Device, state: AppState) {
     val running = device.name in state.running
@@ -55,25 +52,23 @@ import com.composeunstyled.UnstyledButton
     Column(Modifier.fillMaxSize().testTag("EmulatorPanel")) {
         Row(Modifier.fillMaxWidth().padding(horizontal=24.dp, vertical=18.dp), verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Label(device.displayName, size=17, weight=FontWeight.SemiBold, modifier=Modifier.testTag("PreviewDeviceName"))
+                Label(device.displayName, modifier=Modifier.testTag("PreviewDeviceName"))
                 Spacer(Modifier.height(3.dp))
-                Label(androidFamilyTitle(device.api), color=Palette.muted, size=12)
+                Label(androidFamilyTitle(device.api), color=JewelTheme.globalColors.text.info)
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
-            val bezel = 9.dp
+            val bezel = 0.dp
             // Keep one physical surface; its scale and touch coordinates never
             // change when it turns. The parent transform maps pointer positions.
             val naturalRatio = width.toFloat() / height.coerceAtLeast(1)
             val screenWidth = minOf(maxWidth - bezel*2, (maxHeight-bezel*2)*naturalRatio).coerceAtLeast(1.dp)
             val screenHeight = screenWidth / naturalRatio
-            val outerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 34.dp)
-            val innerShape = RoundedCornerShape(if(device.type == DeviceType.WEAR) 100.dp else 26.dp)
             Box(Modifier.requiredSize(screenWidth+bezel*2,screenHeight+bezel*2)
                 .graphicsLayer { rotationZ = angle }
-                .background(Color(0xFF101011), outerShape).border(2.dp, Color(0xFF666366), outerShape)
+                .background(JewelTheme.globalColors.panelBackground)
                 .padding(bezel).testTag("EmulatorBezel")) {
-                Box(Modifier.fillMaxSize().clip(innerShape).background(Color(0xFF202022))
+                Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground)
                     .focusRequester(focus).onPreviewKeyEvent { event ->
                         if (!running || rotating || event.type != KeyEventType.KeyDown) false else {
                             val code = when(event.key) { Key.Enter -> "66"; Key.Backspace -> "67"; Key.Escape -> "4"; Key.DirectionLeft -> "21"; Key.DirectionRight -> "22"; Key.DirectionUp -> "19"; Key.DirectionDown -> "20"; else -> null }
@@ -114,19 +109,19 @@ import com.composeunstyled.UnstyledButton
                         contentScale=ContentScale.FillBounds,
                         colorFilter=if(running) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }))
                     if(!running) {
-                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.30f)))
-                        Column(Modifier.align(Alignment.Center), horizontalAlignment=Alignment.CenterHorizontally) {
-                            UnstyledButton(onClick={state.launch(device)}, enabled=!starting && !state.busy && !device.missingStorage,
-                                modifier=Modifier.size(86.dp).background(Color(0xEDE9E3DE),RoundedCornerShape(50)).testTag("Launch-${device.name}")
-                                    .semantics { contentDescription="Start ${device.displayName}" }) {
-                                Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Icon("play",Color(0xFF302B2C),Modifier.size(38.dp)) }
+                        Column(Modifier.align(Alignment.Center).background(JewelTheme.globalColors.panelBackground).padding(12.dp), horizontalAlignment=Alignment.CenterHorizontally) {
+                            org.jetbrains.jewel.ui.component.DefaultButton(onClick={state.launch(device)}, enabled=!starting && !state.busy && !device.missingStorage,
+                                modifier=Modifier.testTag("Launch-${device.name}").semantics { contentDescription="Start ${device.displayName}" }) {
+                                Icon("play")
+                                Spacer(Modifier.width(6.dp))
+                                Label(if(starting) "Starting…" else "Start device")
                             }
                             Spacer(Modifier.height(16.dp))
-                            Label(if(starting) "Starting…" else if(device.missingStorage) "Storage unavailable" else "Start device", weight=FontWeight.Medium)
-                            if(frame == null && !starting) { Spacer(Modifier.height(7.dp)); Label("No saved screen yet", size=11, color=Palette.muted) }
+                            if(device.missingStorage) Label("Storage unavailable")
+                            if(frame == null && !starting) { Spacer(Modifier.height(7.dp)); Label("No saved screen yet", color=JewelTheme.globalColors.text.info) }
                         }
                     } else if(frame == null || state.displayErrors[device.name] != null) {
-                        Label(state.displayErrors[device.name] ?: "Waiting for the device screen…", Modifier.align(Alignment.Center).padding(20.dp), size=12)
+                        Label(state.displayErrors[device.name] ?: "Waiting for the device screen…", Modifier.align(Alignment.Center).padding(20.dp))
                     }
                 }
             }

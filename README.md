@@ -1,7 +1,7 @@
 # AvdBuddy
 
 A Kotlin desktop app for managing Android Virtual Devices without opening Android Studio.
-Built with Compose Desktop, JetBrains Jewel, and Compose Unstyled. No Material UI.
+Built with Compose Desktop and the default JetBrains Jewel light theme. No Material UI.
 
 ## Run
 

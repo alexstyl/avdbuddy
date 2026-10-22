@@ -37,7 +37,7 @@ nucleus {
             languageVersion = JavaLanguageVersion.of(25)
             vendor = JvmVendorSpec.JETBRAINS
         }.get().metadata.installationPath.asFile.path
-        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED", "-Dapple.awt.application.name=AvdBuddy", "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua")
+        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED", "-Dapple.awt.application.name=AvdBuddy", "-Dapple.awt.application.appearance=NSAppearanceNameAqua")
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Zip)
             packageName = "AvdBuddy"
