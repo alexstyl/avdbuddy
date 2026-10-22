@@ -108,6 +108,9 @@ import java.net.URI
     var chosen by remember { mutableStateOf<SystemImage?>(null) }
     val nameField = rememberTextFieldState("Pixel_"+(System.currentTimeMillis()%10000))
     val name = nameField.text.toString()
+    val nameIssue = deviceNameError(name, state.devices.map { it.name })
+    var closeRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(closeRequested, state.creating) { if (closeRequested && !state.creating) state.showCreate=false }
     var profile by remember { mutableStateOf(type.profile) }
     var ram by remember { mutableStateOf("Default") }
     var storage by remember { mutableStateOf(16) }
@@ -135,30 +138,30 @@ import java.net.URI
     Sheet(title,"CreateWindow",width=840,height=710,
         scrollableContent=step!=1 && !showProgress,
         contentPadding=if(step==1 && !showProgress) PaddingValues(start=24.dp,end=24.dp,top=20.dp) else PaddingValues(24.dp),
-        onClose={if(!state.creating)state.showCreate=false},footer={
+        onClose={if(state.creating) {closeRequested=true;state.cancelCreate()} else state.showCreate=false},footer={
         if(!showProgress) {
             if(step==3 && reviewPlan?.canCreate==false) Label("Not enough disk space",size=12,color=Palette.error)
             Spacer(Modifier.weight(1f))
             ActionButton("Cancel",tag="CancelCreate"){state.showCreate=false}
             if(step>0)ActionButton("Previous",tag="PreviousCreate"){step--}
             ActionButton(if(step==3) "Create" else "Continue",primary=true,
-                enabled=!state.busy && (step!=1||chosen!=null) && (step!=3 || (reviewPlan?.canCreate==true && reviewError.isBlank() && name.isNotBlank())),tag="ContinueCreate") {
+                enabled=!state.busy && (step!=1||chosen!=null) && (step!=2||nameIssue==null) && (step!=3 || (reviewPlan?.canCreate==true && reviewError.isBlank() && nameIssue==null)),tag="ContinueCreate") {
                 if(step<3) { step++;if(step==1)state.loadCatalog() } else specification()?.let { spec ->
                     showProgress=true
                     state.create(spec)
                 }
             }
         } else {
-            if(state.creating) {Label("You can cancel this operation.",size=12,color=Palette.muted);Spacer(Modifier.weight(1f));ActionButton("Cancel download",tag="CancelDownload"){state.cancelCreate()} }
+            if(state.creating) {Label(if(state.createCancelling) "Cancelling…" else "Installed Android images are kept if you cancel.",size=12,color=Palette.muted);Spacer(Modifier.weight(1f));ActionButton("Cancel creation",enabled=!state.createCancelling,tag="CancelDownload"){state.cancelCreate()} }
             else {Spacer(Modifier.weight(1f));if(state.createError.isNotBlank())ActionButton("Back",tag="BackFromError"){showProgress=false};ActionButton("Done",primary=true,tag="CreateDone"){state.showCreate=false}}
         }
     }) {
         if(showProgress) {
             if(state.createFinished) {
                 Box(Modifier.fillMaxWidth().padding(vertical=12.dp),contentAlignment=Alignment.Center){Icon("check",Palette.green,Modifier.size(44.dp))}
-                Label("$name is ready to launch from your device shelf.",size=15)
+                Label("$name is ready. Select it in the device list and press Play to start it.",size=15)
             } else if(state.creating) {
-                Label("Installing Android and preparing your virtual device…",color=Palette.muted)
+                Label(if(state.createCancelling) "Cancelling device creation…" else "Preparing Android and creating your device…",color=Palette.muted)
             }
             if(state.createError.isNotBlank()) SelectionContainer { Label(state.createError,color=Palette.error,modifier=Modifier.testTag("CreateError"),size=12) }
             ActivityLog(output, Modifier.weight(1f))
@@ -187,6 +190,7 @@ import java.net.URI
                 Section("Identity","phone") {
                     Label("Device name",color=Palette.muted,size=12)
                     Field(nameField,"DeviceName",Modifier.fillMaxWidth())
+                    Label(nameIssue ?: "Use letters, numbers, dots, underscores or hyphens.",color=if(nameIssue!=null) Palette.error else Palette.muted,size=12)
                     Label(chosen?.title.orEmpty(),color=Palette.muted,size=12)
                 }
                 Section("General","settings") {
@@ -205,8 +209,8 @@ import java.net.URI
                     FormRow("Device frame"){CheckboxRow("Show frame",checked=frame,onCheckedChange={frame=it},modifier=Modifier.testTag("DeviceFrame"))}
                 }
                 Section("Storage","disk") {
-                    FormRow("Internal storage"){Select(storage,listOf(8,16,32,64),{storage=it},{"$it GB"},"InternalStorage")}
-                    FormRow("SD card"){Select(sd,listOf(0,2,4,8),{sd=it},{if(it==0)"None" else "$it GB"},"SdCard")}
+                    FormRow("Internal storage"){Select(storage,listOf(8,16,32,64),{storage=it},{"$it GiB"},"InternalStorage")}
+                    FormRow("SD card"){Select(sd,listOf(0,2,4,8),{sd=it},{if(it==0)"None" else "$it GiB"},"SdCard")}
                     Label("Device files will be stored in ${state.settings.avds}",size=11,color=Palette.muted)
                 }
                 Section("Android image","download") {
@@ -263,7 +267,7 @@ import java.net.URI
                                 ActionButton("Retry storage check",tag="RetryStorageCheck") { reviewAttempt++ }
                             }
                             reviewPlan?.let { plan ->
-                                FormRow("Peak space budget") { Label(storageSize(plan.required),weight=FontWeight.SemiBold) }
+                                FormRow("Space needed during creation") { Label(storageSize(plan.required),weight=FontWeight.SemiBold) }
                                 plan.disks.forEach { disk ->
                                     Label(disk.location,weight=FontWeight.Medium)
                                     Label("${storageSize(disk.required)} required · ${storageSize(disk.available)} available",size=12,color=if(disk.enough) Palette.muted else Palette.error)
@@ -308,11 +312,23 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
 
 @Composable fun RenameWindow(state:AppState,device:Device) {
     val nameField = rememberTextFieldState(device.name)
-    val name = nameField.text.toString()
-    Sheet("Rename device","RenameWindow",height=295,onClose={state.renameDevice=null},footer={
-        Spacer(Modifier.weight(1f));ActionButton("Cancel"){state.renameDevice=null}
-        ActionButton("Rename",primary=true,enabled=name.isNotBlank()&&name!=device.name&&device.name !in state.running,tag="ConfirmRename"){state.rename(device,nameField.text.toString());state.renameDevice=null}
-    }) {Label("Give ${device.displayName} a new name.",color=Palette.muted);Field(nameField,"RenameName",Modifier.fillMaxWidth());if(device.name in state.running)Label("Stop this device before renaming it.",color=Palette.error,size=12)}
+    val name = nameField.text.toString().trim()
+    val issue = deviceNameError(name, state.devices.filter { it.name != device.name }.map { it.name })
+    var failure by remember { mutableStateOf<String?>(null) }
+    val running = device.name in state.running || device.name in state.starting
+    Sheet("Rename device","RenameWindow",height=350,onClose={if(!state.busy)state.renameDevice=null},footer={
+        Spacer(Modifier.weight(1f));ActionButton("Cancel",enabled=!state.busy){state.renameDevice=null}
+        ActionButton("Rename",primary=true,enabled=!state.busy&&issue==null&&name!=device.name&&!running,tag="ConfirmRename") {
+            failure=null
+            state.rename(device,nameField.text.toString()) { error -> if(error==null)state.renameDevice=null else failure=error }
+        }
+    }) {
+        Label("Give ${device.displayName} a new name.",color=Palette.muted)
+        Field(nameField,"RenameName",Modifier.fillMaxWidth())
+        val hint = when { state.busy -> "Renaming device… This window will close when finished."; running -> "Stop this device before renaming it."; issue!=null -> issue; name==device.name -> "Enter a different name to rename this device."; else -> "Use letters, numbers, dots, underscores or hyphens." }
+        Label(hint,color=if(running||issue!=null) Palette.error else Palette.muted,size=12)
+        failure?.let { Label(it,color=Palette.error,size=12) }
+    }
 }
 @Composable fun DeleteWindow(state:AppState) {
     val devices=state.deleteDevices
@@ -322,11 +338,17 @@ fun ActivityLog(output: String, modifier: Modifier = Modifier) {
     }) {Label(devices.joinToString { it.displayName },weight=FontWeight.Medium);Label("The devices and their saved data will be removed. Running devices will be stopped first. This cannot be undone.",color=Palette.muted)}
 }
 @Composable fun AboutWindow(state:AppState) {
-    Sheet("AvdBuddy","AboutWindow",height=450,onClose={state.showAbout=false},footer={Spacer(Modifier.weight(1f));ActionButton("Done",primary=true){state.showAbout=false}}) {
+    Sheet("AvdBuddy","AboutWindow",height=560,onClose={state.showAbout=false},footer={Spacer(Modifier.weight(1f));ActionButton("Done",primary=true){state.showAbout=false}}) {
         Label("Android devices. Without the IDE.",size=17,weight=FontWeight.Medium)
         Label("Version $APP_VERSION",color=Palette.muted)
         Label("Built with Kotlin, Compose Desktop, Jewel, and Compose Unstyled.",color=Palette.muted)
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {ActionButton("GitHub"){Desktop.getDesktop().browse(URI("https://github.com/alexstyl/avdbuddy"))};ActionButton("Check for updates",enabled=!state.busy){state.checkUpdates()}}
+        Section("Using your devices", "phone") {
+            Label("Select a device in the sidebar to preview it. Selection never starts the emulator.",size=12)
+            Label("Press Play to start it. A gray screen is the last captured preview; the running screen appears in color.",size=12)
+            Label("Use Settings to reconnect an unavailable SDK or device folder. Changing folders leaves existing devices in place.",size=12)
+            Label("Shortcuts: ⌘N creates a device. ⌘, opens Settings. ⌘⌫ asks to delete the selected device.",size=11,color=Palette.muted)
+        }
         ActionButton("Copy diagnostics",tag="CopyDiagnostics"){state.copyDiagnostics()}
         Label("By Alex Styl · Inspired by VirtualBuddy",color=Palette.muted,size=12)
     }
