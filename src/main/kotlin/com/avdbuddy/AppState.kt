@@ -32,6 +32,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     val frameRotations = mutableStateMapOf<String, Int>()
     val displayErrors = mutableStateMapOf<String, String>()
     var starting by mutableStateOf(setOf<String>()); private set
+    val deviceOperations = mutableStateMapOf<String, String>()
     fun selectPreview(device: Device) { previewName = device.name; selected = setOf(device.name) }
     suspend fun observeDisplays(): Unit = coroutineScope {
         launch {
@@ -181,14 +182,15 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     }
     fun refreshAsync() = scope.launch { runCatching { refresh() }.onFailure { report(it) } }
     private fun report(t: Throwable) { status = t.message ?: t.toString(); error = true }
-    private fun action(success: String, onResult: (String?) -> Unit = {}, block: (AndroidService) -> Unit) {
+    private fun action(success: String, onResult: (String?) -> Unit = {}, operations: Map<String, String> = emptyMap(), block: (AndroidService) -> Unit) {
         if (busy) return
         val backend = service
+        deviceOperations.putAll(operations)
         scope.launch {
             busy = true; error = false
             try { withContext(Dispatchers.IO) { block(backend) }; status = success; refresh(); onResult(null) }
             catch (t: Exception) { if (t is CancellationException) throw t; report(t); onResult(t.message ?: "The operation could not be completed.") }
-            finally { busy = false }
+            finally { operations.keys.forEach(deviceOperations::remove); busy = false }
         }
     }
     fun launch(device: Device) {
@@ -216,16 +218,16 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
             } finally { starting = starting - device.name }
         }
     }
-    fun stop(device: Device) = action("Stopped ${device.displayName}.") { backend ->
+    fun stop(device: Device) = action("Stopped ${device.displayName}.", operations = mapOf(device.name to "Shutting down…")) { backend ->
         running[device.name]?.let { serial ->
             runCatching { display.capture(backend.settings, device, serial) }
             backend.stop(serial)
         }
     }
-    fun restart(device: Device) = action("Restarting ${device.displayName}…") { backend ->
+    fun restart(device: Device) = action("Restarting ${device.displayName}…", operations = mapOf(device.name to "Restarting…")) { backend ->
         running[device.name]?.let(backend::restart)
     }
-    fun stopAll() = action("Stopped all running emulators.") { backend -> running.forEach { (name, serial) ->
+    fun stopAll() = action("Stopped all running emulators.", operations = running.keys.associateWith { "Shutting down…" }) { backend -> running.forEach { (name, serial) ->
         devices.firstOrNull { it.name == name }?.let { runCatching { display.capture(backend.settings, it, serial) } }; backend.stop(serial) } }
     fun duplicate(device: Device) = action("Duplicated ${device.displayName}.") {
         require(device.name !in running && device.name !in starting) { "Stop ${device.displayName} before duplicating it." }

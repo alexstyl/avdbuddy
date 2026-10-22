@@ -189,6 +189,9 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
 @Composable private fun DeviceRow(device: Device, state: AppState) {
     val selected = state.previewDevice?.name == device.name
     val running = device.name in state.running
+    val operation = state.deviceOperations[device.name]
+        ?: if (device.name in state.starting) "Starting…" else null
+    val subtitle = operation ?: if (device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api)
     ContextMenuArea(items = { buildList {
         if (!state.busy) {
             if (running) {
@@ -210,16 +213,16 @@ fun configureMacWindow(window: androidx.compose.ui.awt.ComposeWindow) {
         Row(Modifier.fillMaxWidth().testTag("Device-${device.name}")
             .clip(RoundedCornerShape(8.dp)).background(if(selected) Palette.accent.copy(alpha=.18f) else Color.Transparent)
             .border(1.dp, if(selected) Palette.accent.copy(alpha=.65f) else Color.Transparent, RoundedCornerShape(8.dp))
-            .semantics { this.selected=selected; contentDescription="${device.displayName}, ${androidFamilyTitle(device.api)}" }
+            .semantics { this.selected=selected; contentDescription="${device.displayName}, $subtitle" }
             .clickable { state.selectPreview(device) }.padding(horizontal=12.dp, vertical=10.dp), verticalAlignment=Alignment.CenterVertically) {
             Icon("phone", if(running) Palette.green else Palette.muted, Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Label(device.displayName, weight=FontWeight.SemiBold, maxLines=1)
                 Spacer(Modifier.height(4.dp))
-                Label(if(device.missingStorage) "Storage unavailable" else androidFamilyTitle(device.api), size=11, color=Palette.muted, maxLines=1)
+                Label(subtitle, size=11, color=Palette.muted, maxLines=1)
             }
-            if(device.name in state.starting) {
+            if(operation != null) {
                 Spacer(Modifier.width(10.dp))
                 org.jetbrains.jewel.ui.component.CircularProgressIndicator(Modifier.size(16.dp))
             }
