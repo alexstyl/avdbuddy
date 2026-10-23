@@ -169,6 +169,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                 IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
                 IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
                 Spacer(Modifier.weight(1f))
+                ActionButton(if (state.license.licensed) "Licensed" else "Unlicensed", tag="LicenseStatus") { state.license.visible=true }
                 IconButton("info", "About AvdBuddy", "About") { state.showAbout=true }
             }
         }
@@ -190,6 +191,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     if(state.showSettings) SettingsWindow(state)
     LaunchedEffect(state, autoRefresh) { if (autoRefresh) state.updates.monitor() }
     if(state.updates.visible) UpdatesWindow(state)
+    if(state.license.visible) LicenseWindow(state.license)
     if(state.showAbout) AboutWindow(state)
     state.renameDevice?.let { device -> RenameWindow(state,device) }
 }

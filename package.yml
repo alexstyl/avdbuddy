@@ -11,3 +11,4 @@ dependencies:
   - io.grpc:grpc-stub:1.85.0
   - io.grpc:grpc-protobuf:1.85.0
   - org.yaml:snakeyaml:2.5
+  - org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0

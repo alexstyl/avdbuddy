@@ -14,15 +14,17 @@ import org.junit.jupiter.api.Test
 
 class AppUpdatesTest {
     @Test fun `development installs cannot self update`() {
-        assertNotNull(updateInstallation(null, updatesConfigured = true))
-        assertNotNull(updateInstallation(File("/project/build/AvdBuddy.app"), updatesConfigured = true))
-        assertNull(updateInstallation(File("/Applications/AvdBuddy.app"), updatesConfigured = true))
+        assertFalse(installedForUpdates(HostOs.MAC, bundle = null))
+        assertFalse(installedForUpdates(HostOs.MAC, bundle = File("/project/build/AvdBuddy.app")))
+        assertTrue(installedForUpdates(HostOs.MAC, bundle = File("/Applications/AvdBuddy.app")))
         assertEquals(File("/Applications/AvdBuddy.app"), appBundle(File("/Applications/AvdBuddy.app/Contents/runtime/Contents/Home")))
     }
 
-    @Test fun `unconfigured updates are unavailable even in installed apps`() {
-        assertEquals("Automatic updates are not available yet.",
-            updateInstallation(File("/Applications/AvdBuddy.app"), updatesConfigured = false))
+    @Test fun `native Windows and Linux installations enable updates`() {
+        assertFalse(installedForUpdates(HostOs.WINDOWS, executable = null))
+        assertTrue(installedForUpdates(HostOs.WINDOWS, executable = "C:/Apps/AvdBuddy/AvdBuddy.exe"))
+        assertFalse(installedForUpdates(HostOs.LINUX, appImage = null))
+        assertTrue(installedForUpdates(HostOs.LINUX, appImage = "/opt/AvdBuddy.AppImage"))
     }
 
     @Test fun `Nucleus discovers downloads and verifies update checksum`(): Unit = runBlocking {

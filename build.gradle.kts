@@ -9,7 +9,8 @@ plugins {
     id("com.composables.kpm") version "0.2.0"
     id("com.google.protobuf") version "0.10.0"
 }
-val buildVersion = "1.0.0"
+val buildVersion = project.version.toString()
+require(buildVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) { "Set a stable version in package.yml" }
 tasks.processResources {
     inputs.property("buildVersion", buildVersion)
     filesMatching("avdbuddy-build.properties") {
@@ -76,8 +77,28 @@ nucleus {
             macOS {
                 bundleID = "com.alexstyl.avdbuddy"
                 minimumSystemVersion = "12.0"
-                packageBuildVersion = "1000"
+                packageBuildVersion = buildVersion
+                signing {
+                    sign.set(providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY").isPresent)
+                    identity.set(providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY"))
+                }
+                notarization {
+                    keychainProfile.set(providers.environmentVariable("AVDBUDDY_NOTARY_PROFILE"))
+                }
             }
+        }
+    }
+}
+
+// Nucleus signs the app bundle; also sign the disk image before notarizing it.
+tasks.matching { it.name == "packageDmg" }.configureEach {
+    val identity = providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY")
+    inputs.property("diskImageSigningIdentity", identity.orElse(""))
+    doLast {
+        if (identity.isPresent) {
+            val images = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile.listFiles().orEmpty().filter { it.extension == "dmg" }
+            check(images.size == 1) { "Expected exactly one DMG to sign" }
+            providers.exec { commandLine("/usr/bin/codesign", "--force", "--timestamp", "--sign", identity.get(), images.single().absolutePath) }.result.get().assertNormalExitValue()
         }
     }
 }

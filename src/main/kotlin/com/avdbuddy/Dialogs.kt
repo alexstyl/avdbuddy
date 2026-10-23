@@ -236,6 +236,7 @@ import java.net.URI
     Sheet("AvdBuddy","AboutWindow",height=560,onClose={state.showAbout=false},footer={Spacer(Modifier.weight(1f));ActionButton("Done",primary=true){state.showAbout=false}}) {
         Label("Android devices. Without the IDE.")
         Label("Version $APP_VERSION",color=JewelTheme.globalColors.text.info)
+        ActionButton(if (state.license.licensed) "Licensed · Manage license" else "Unlicensed · Activate license") { state.license.visible = true }
         Label("Built with Kotlin, Compose Desktop, and Jewel.",color=JewelTheme.globalColors.text.info)
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {ActionButton("GitHub"){Desktop.getDesktop().browse(URI("https://github.com/alexstyl/avdbuddy"))};ActionButton("Check for updates",enabled=!state.busy){state.checkUpdates()}}
         Section("Using your devices", "phone") {
@@ -247,6 +248,23 @@ import java.net.URI
         }
         ActionButton("Copy diagnostics",tag="CopyDiagnostics"){state.copyDiagnostics()}
         Label("By Alex Styl · Inspired by VirtualBuddy",color=JewelTheme.globalColors.text.info)
+    }
+}
+
+@Composable fun LicenseWindow(license: AppLicense) {
+    val key = rememberTextFieldState()
+    Sheet("License", "LicenseWindow", height=400, onClose={license.visible=false}, footer={
+        ActionButton("Manage license") { Desktop.getDesktop().browse(URI(LICENSE_ORIGIN)) }
+        Spacer(Modifier.weight(1f))
+        ActionButton("Close") { license.visible=false }
+        ActionButton(if (license.licensed) "Reactivate" else "Activate", primary=true, enabled=!license.working) { license.activate(key.text.toString()) }
+    }) {
+        Label(if (license.licensed) "Licensed" else "Unlicensed")
+        license.updatesThrough?.let { Label("Updates included through $it. Your licensed version remains yours to use.") }
+        Label("All current features are available without a license.")
+        Label("License key")
+        Field(key, "LicenseKey", Modifier.fillMaxWidth())
+        if (license.message.isNotBlank()) Label(license.message)
     }
 }
 

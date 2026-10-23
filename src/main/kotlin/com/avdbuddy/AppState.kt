@@ -403,6 +403,7 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
         status = "Diagnostics copied."; error = false
     }
-    val updates = AppUpdates(scope)
+    val license = AppLicense(scope)
+    val updates = AppUpdates(scope, license)
     fun checkUpdates() = updates.check()
 }

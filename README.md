@@ -155,13 +155,27 @@ The `.app` is in `build/compose/binaries/main/app/`. Nucleus packages the DMG,
 ZIP and `latest-mac.yml` update metadata beneath `build/compose/binaries/main/`.
 These commands only build local artifacts; they do not publish a GitHub release.
 
-The local installer formats are DMG/ZIP on macOS, NSIS on Windows, and AppImage
-on Linux. Signing, notarization, and release publishing are not configured.
+The installer formats are DMG/ZIP on macOS, NSIS on Windows, and AppImage on
+Linux. Official downloads are at https://avdbuddy.com/download. The current
+distribution targets Apple silicon on macOS and x64 on Windows/Linux.
 
-The updater retains verified downloads and user-controlled installation, but no
-update service is configured yet. Background checks stay inactive; manual checks
-explain that automatic updates are not available yet. The new distribution service
-will supply the update source.
+Installed builds check for updates through https://licenses.avdbuddy.com and
+download installers from https://downloads.avdbuddy.com. Downloads are verified
+against SHA-512 checksums; installation requires an explicit restart. Development
+builds do not update themselves. You can disable automatic update checks.
+
+License activation is optional and does not restrict current features. Use the
+license indicator in the sidebar to activate a key or open the license portal.
+Activation saves a signed receipt bound to this installation; the key is not
+stored. The app verifies the receipt offline and does not poll activation status.
+Updates use the receipt's entitlement date to select the newest eligible release.
+An expired update entitlement never stops the app or invalidates an older version.
+Unlicensed installations can receive updates while current features remain free.
+
+For a signed macOS build, set `AVDBUDDY_MAC_SIGN_IDENTITY` to a Developer ID
+Application identity in your Keychain and `AVDBUDDY_NOTARY_PROFILE` to a
+`notarytool` Keychain profile. Run `packageDmg packageZip`, then `notarizeDmg
+notarizeZip`. Packaging alone never uploads or publishes a release.
 
 Inspired by [VirtualBuddy](https://github.com/insidegui/VirtualBuddy).
 
