@@ -96,19 +96,21 @@ nucleus {
 // jpackage rejects 0.x app versions. Use the build number for its input, then
 // restore the public version and re-sign the outer bundle before packaging it.
 if (System.getProperty("os.name").startsWith("Mac") && buildVersion.startsWith("0.")) {
-    tasks.withType<AbstractJPackageTask>().matching { it.name == "createDistributable" }.configureEach {
-        packageVersion.set(macBuildNumber)
-        inputs.property("publicAppVersion", buildVersion)
-        doLast {
-            val bundle = layout.buildDirectory.dir("compose/binaries/main/app/AvdBuddy.app").get().asFile
-            providers.exec {
-                commandLine("/usr/libexec/PlistBuddy", "-c", "Set :CFBundleShortVersionString $buildVersion", bundle.resolve("Contents/Info.plist").absolutePath)
-            }.result.get().assertNormalExitValue()
-            val identity = providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY")
-            if (identity.isPresent) {
+    afterEvaluate {
+        tasks.named<AbstractJPackageTask>("createDistributable") {
+            packageVersion.set(macBuildNumber)
+            inputs.property("publicAppVersion", buildVersion)
+            doLast {
+                val bundle = layout.buildDirectory.dir("compose/binaries/main/app/AvdBuddy.app").get().asFile
                 providers.exec {
-                    commandLine("/usr/bin/codesign", "--force", "--timestamp", "--preserve-metadata=identifier,entitlements,requirements,flags,runtime", "--sign", identity.get(), bundle.absolutePath)
+                    commandLine("/usr/libexec/PlistBuddy", "-c", "Set :CFBundleShortVersionString $buildVersion", bundle.resolve("Contents/Info.plist").absolutePath)
                 }.result.get().assertNormalExitValue()
+                val identity = providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY")
+                if (identity.isPresent) {
+                    providers.exec {
+                        commandLine("/usr/bin/codesign", "--force", "--timestamp", "--preserve-metadata=identifier,entitlements,requirements,flags,runtime", "--sign", identity.get(), bundle.absolutePath)
+                    }.result.get().assertNormalExitValue()
+                }
             }
         }
     }
