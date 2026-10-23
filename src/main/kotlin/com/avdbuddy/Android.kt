@@ -374,8 +374,6 @@ class AndroidService(val settings: AppSettings, private val executor: CommandExe
     }
     fun diagnostics() = buildString {
         appendLine("$APP_NAME $APP_VERSION · Kotlin ${KotlinVersion.CURRENT}")
-        appendLine("Channel: ${appBuild.channel}")
-        appendLine("Self-updates: ${if (appBuild.isNightly) "disabled" else "stable"}")
         appendLine("${System.getProperty("os.name")} ${System.getProperty("os.version")} · ${System.getProperty("os.arch")}")
         appendLine("SDK: ${toolchain.root}\nAVDs: $avdRoot")
         toolchain.tools.forEach { (name, file) -> appendLine("$name: ${if(file.canExecute()) "available" else "missing"} ($file)") }

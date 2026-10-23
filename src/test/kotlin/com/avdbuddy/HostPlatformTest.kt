@@ -7,7 +7,7 @@ import kotlin.test.*
 
 class HostPlatformTest {
     @TempDir lateinit var root: File
-    private fun host(os: HostOs, env: Map<String, String> = emptyMap()) = HostPlatform(os, root, env, "1234", BuildIdentity("stable", "1.0.0"))
+    private fun host(os: HostOs, env: Map<String, String> = emptyMap()) = HostPlatform(os, root, env, "1234")
 
     @Test fun `defaults follow each desktop platform`() {
         val mac = host(HostOs.MAC)
@@ -96,17 +96,6 @@ class HostPlatformTest {
         assertEquals(userHome.absoluteFile, expandPath("~"))
         assertEquals(File(userHome, "Android SDK").absoluteFile, expandPath("~/Android SDK"))
         assertEquals(File(userHome, "Android SDK").absoluteFile, expandPath("~\\Android SDK"))
-    }
-
-    @Test fun `nightly preferences stay separate while Android locations are shared`() {
-        for (os in HostOs.entries) {
-            val stable = HostPlatform(os, root, emptyMap(), "1234", BuildIdentity("stable", "1.0.0"))
-            val nightly = HostPlatform(os, root, emptyMap(), "1234", BuildIdentity("nightly", "1.0.0-nightly.test"))
-            assertNotEquals(stable.configDirectory, nightly.configDirectory)
-            assertEquals(stable.configDirectory.parentFile, nightly.configDirectory.parentFile)
-            assertEquals(stable.defaultSdk, nightly.defaultSdk)
-            assertEquals(stable.defaultAvds, nightly.defaultAvds)
-        }
     }
 
 }

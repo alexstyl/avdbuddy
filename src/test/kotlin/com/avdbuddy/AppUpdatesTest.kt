@@ -13,23 +13,16 @@ import kotlin.test.*
 import org.junit.jupiter.api.Test
 
 class AppUpdatesTest {
-    @Test fun `development and brew installs cannot self update`() {
-        assertNotNull(updateInstallation(null, false, nightly = false))
-        assertNotNull(updateInstallation(File("/project/build/AvdBuddy.app"), false, nightly = false))
-        assertTrue(updateInstallation(File("/Applications/AvdBuddy.app"), true, nightly = false)!!.contains("brew upgrade"))
-        assertNull(updateInstallation(File("/Applications/AvdBuddy.app"), false, nightly = false))
+    @Test fun `development installs cannot self update`() {
+        assertNotNull(updateInstallation(null, updatesConfigured = true))
+        assertNotNull(updateInstallation(File("/project/build/AvdBuddy.app"), updatesConfigured = true))
+        assertNull(updateInstallation(File("/Applications/AvdBuddy.app"), updatesConfigured = true))
         assertEquals(File("/Applications/AvdBuddy.app"), appBundle(File("/Applications/AvdBuddy.app/Contents/runtime/Contents/Home")))
     }
 
-    @Test fun `nightly installations can never self update`() {
-        for (bundle in listOf(null, File("/Applications/AvdBuddy-Nightly.app"))) {
-            for (brew in listOf(false, true)) {
-                assertContains(updateInstallation(bundle, brew, nightly = true)!!, "do not check for or install updates")
-            }
-        }
-        assertNotEquals(BuildIdentity("stable", "1.0.0").settingsDirectoryName,
-            BuildIdentity("nightly", "1.0.0-nightly.test").settingsDirectoryName)
-        assertEquals("AvdBuddy Nightly", BuildIdentity("nightly", "1.0.0-nightly.test").appName)
+    @Test fun `unconfigured updates are unavailable even in installed apps`() {
+        assertEquals("Automatic updates are not available yet.",
+            updateInstallation(File("/Applications/AvdBuddy.app"), updatesConfigured = false))
     }
 
     @Test fun `Nucleus discovers downloads and verifies update checksum`(): Unit = runBlocking {

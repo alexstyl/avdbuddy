@@ -1,4 +1,6 @@
-# AvdBuddy
+# AvdBuddy desktop app
+
+Run the following commands from the directory containing this README.
 
 A Kotlin desktop app for managing Android Virtual Devices without opening Android Studio.
 Built with Compose Desktop and the default JetBrains Jewel light theme. No Material UI.
@@ -119,32 +121,7 @@ required. Existing devices keep their configurations.
 
 Windows equivalent: `.\gradlew.bat test`.
 
-The **Nightly** GitHub Actions workflow runs nightly against the latest
-`main` at 02:23 Asia/Bangkok (19:23 UTC). Every run forces the headless test task
-to execute, even when Gradle has cached results from an earlier run.
-
-You can also run it manually: Actions → Nightly → Run workflow. Select a
-branch, or optionally enter a branch, tag, or commit in the `ref` field. CLI equivalent:
-
-```bash
-gh workflow run nightly.yml -f ref=YOUR_BRANCH
-```
-
-Each macOS, Windows, and Linux job provisions the native Android tools, builds the
-app, runs all headless backend tests, and executes the app's `--diagnostics` entry
-point. Test reports are uploaded per platform even on failure. The SDK smoke test
-runs real `adb version`, `emulator -version`, `sdkmanager --version`, and
-`avdmanager list device` commands through production process handling. No device
-is booted. Path rules for all three OSes are also tested on every runner.
-
-These checks validate backend behavior, native Skia frame decoding, gRPC streaming,
-file operations, process cancellation, and native SDK invocation. They do not
-validate desktop rendering, actual accelerated emulator boot, or interactions with
-a desktop file manager; those still need interactive checks on each OS before a
-release. Normal manual checks do not publish a release. Nightly runs also package and
-publish the installers described below.
-
-Only backend tests run automatically. They use temporary SDK/AVD fixtures and run
+The test command runs only backend tests. They use temporary SDK/AVD fixtures and run
 headlessly, without opening windows or clicking through the app.
 
 Use [Spectre](https://spectre.sebastiano.dev/) interactively against the running
@@ -167,81 +144,24 @@ Interactive actions operate on the actual running app and its real devices.
 The last attach check encountered a Spectre session error; interactive attachment
 still needs troubleshooting.
 
-## Nightly downloads
-
-Nightly app versions and download filenames use `nightly.<7-character commit SHA>`
-(for example, `nightly.1871d37`). Release tags also include the date and run number
-so repeated builds of the same commit have separate releases.
-
-Each successful nightly publishes a dated GitHub **prerelease** with installers
-for macOS Apple Silicon and Intel (one DMG each), Windows x64 (one installer EXE),
-and Linux x64 (one AppImage): exactly four installers. Java is bundled; an Android SDK is still
-required. Download from [GitHub Releases](https://github.com/alexstyl/avdbuddy/releases).
-The release notes include installation instructions and SHA-256 checksums.
-These are unsigned development builds; macOS Gatekeeper or Windows SmartScreen
-may require manual approval.
-
-Nightlies install as **AvdBuddy-Nightly**, with a separate bundle/package identity
-and preferences folder. They share the Android SDK and AVD storage with stable
-and Android Studio; device changes affect those same devices.
-
-Nightlies never check for or install updates, automatically or manually. To update,
-download another nightly. Stable releases retain their existing update behavior:
-nightly releases are marked prerelease and `make_latest=false`, contain no
-`latest*.yml` or Sparkle `appcast.xml`, and omit the stable Sparkle feed from the
-macOS bundle. The packaging tool cannot publish releases itself; only the final
-workflow job can publish, after every platform passes.
-
-To build a nightly immediately, run **Nightly** on `main` and enable the
-**nightly** checkbox, or run:
-
-```bash
-gh workflow run nightly.yml --ref main -f nightly=true
-```
-
-Branch runs can build downloadable workflow artifacts with that checkbox, but
-only `main` can publish a nightly release. Installers are checked with their real
-packaged launcher in headless diagnostics mode; no app windows or emulators boot.
-
 ## Packaging
 
 ```bash
 ./gradlew createDistributable
-./scripts/releaseMac
+./gradlew packageDmg packageZip
 ```
 
 The `.app` is in `build/compose/binaries/main/app/`. Nucleus packages the DMG,
 ZIP and `latest-mac.yml` update metadata beneath `build/compose/binaries/main/`.
 These commands only build local artifacts; they do not publish a GitHub release.
 
-Installed direct-download builds check for updates at startup and every 12 hours.
-About → Check for updates also checks manually. Users download a checksum-verified
-update and choose Restart and install; restart is disabled during device operations.
-Automatic checks can be disabled in that window. Development builds skip updates.
-Homebrew installations use `brew upgrade --cask avdbuddy` instead.
+The local installer formats are DMG/ZIP on macOS, NSIS on Windows, and AppImage
+on Linux. Signing, notarization, and release publishing are not configured.
 
-For a signed, notarized release preparation:
-
-```bash
-RELEASE_SIGN_IDENTITY='Developer ID Application: …' \
-NOTARY_KEYCHAIN_PROFILE='your-notary-profile' \
-SPARKLE_TOOLS_DIR='/path/to/Sparkle/bin' \
-./scripts/releaseMac -PsignedRelease=true
-```
-
-The Sparkle tools must have access to the existing `avdbuddy` EdDSA signing key in
-Keychain. The script creates `build/sparkle/appcast.xml` and `AvdBuddy.dmg` for
-existing Swift installations. It preserves the bundle ID, feed URL and public key;
-Compose version 1.0.0 uses build 1000, above the previous build 600.
-The Compose app itself uses Nucleus, not the Swift Sparkle runtime.
-
-Before publishing separately, verify signing/notarization and test an upgrade from
-an installed Swift release and a Compose release on a test machine. A future
-`v1.0.0` GitHub release must include the Nucleus ZIP and matching `latest-mac.yml`,
-plus the signed Sparkle `AvdBuddy.dmg` and `appcast.xml`. Keep artifact filenames
-exactly as referenced by the metadata. Subsequent releases must increment the
-app version and macOS build number. Homebrew cask sources remain in
-`packaging/homebrew/`. Swift sources and Xcode project files have been removed.
+The updater retains verified downloads and user-controlled installation, but no
+update service is configured yet. Background checks stay inactive; manual checks
+explain that automatic updates are not available yet. The new distribution service
+will supply the update source.
 
 Inspired by [VirtualBuddy](https://github.com/insidegui/VirtualBuddy).
 

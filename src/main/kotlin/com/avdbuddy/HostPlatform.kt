@@ -22,10 +22,9 @@ internal class HostPlatform(
     private val linuxUid: String? = if (os == HostOs.LINUX) runCatching {
         Files.getAttribute(File("/proc/self").toPath(), "unix:uid").toString()
     }.getOrNull() else null,
-    private val build: BuildIdentity = appBuild,
 ) {
     fun env(name: String): String? = environment[name]?.takeIf(String::isNotBlank)
-    private val settingsName get() = build.settingsDirectoryName
+    private val settingsName = APP_NAME
     val configDirectory: File get() = when (os) {
         HostOs.MAC -> File(home, "Library/Application Support/$settingsName")
         HostOs.WINDOWS -> File(env("APPDATA")?.let(::File) ?: File(home, "AppData/Roaming"), settingsName)

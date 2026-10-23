@@ -2,7 +2,6 @@ package com.avdbuddy
 
 import androidx.compose.runtime.*
 import dev.nucleusframework.updater.*
-import dev.nucleusframework.updater.provider.GitHubProvider
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.Properties
@@ -10,14 +9,13 @@ import java.util.Properties
 internal fun appBundle(javaHome: File = File(System.getProperty("java.home"))): File? =
     generateSequence(javaHome) { it.parentFile }.firstOrNull { it.extension == "app" }
 
-internal fun updateInstallation(bundle: File?, homebrewReceipt: Boolean, nightly: Boolean = appBuild.isNightly): String? = when {
-    nightly -> "Nightly builds do not check for or install updates. Download a newer nightly from GitHub Releases."
+internal fun updateInstallation(bundle: File?, updatesConfigured: Boolean): String? = when {
+    !updatesConfigured -> "Automatic updates are not available yet."
     bundle == null || generateSequence(bundle) { it.parentFile }.any { it.name == "build" } -> "Updates are available in installed builds of AvdBuddy."
-    homebrewReceipt -> "Installed with Homebrew. Update with: brew upgrade --cask avdbuddy"
     else -> null
 }
 
-class AppUpdates(private val scope: CoroutineScope) {
+class AppUpdates(private val scope: CoroutineScope, private val updater: NucleusUpdater? = null) {
     private val preference = File(HostPlatform().configDirectory, "updates.properties")
     var automatic by mutableStateOf(runCatching { Properties().apply { preference.inputStream().use(::load) }.getProperty("automatic", "true").toBoolean() }.getOrDefault(true)); private set
     var visible by mutableStateOf(false)
@@ -25,10 +23,7 @@ class AppUpdates(private val scope: CoroutineScope) {
     var message by mutableStateOf(""); private set
     var available by mutableStateOf<UpdateInfo?>(null); private set
     var downloaded by mutableStateOf<File?>(null); private set
-    private val bundle = appBundle()
-    val unavailableReason = updateInstallation(bundle, bundle?.path == "/Applications/AvdBuddy.app" &&
-        listOf("/opt/homebrew/Caskroom/avdbuddy", "/usr/local/Caskroom/avdbuddy").any { File(it).isDirectory })
-    private val updater by lazy { NucleusUpdater { currentVersion = APP_VERSION; provider = GitHubProvider("alexstyl", "avdbuddy") } }
+    val unavailableReason = updateInstallation(appBundle(), updatesConfigured = updater != null)
 
     fun changeAutomatic(value: Boolean) {
         runCatching {
@@ -48,6 +43,7 @@ class AppUpdates(private val scope: CoroutineScope) {
         if (manual) visible = true
         if (working || downloaded != null) return
         unavailableReason?.let { message = it; return }
+        val updater = updater ?: return
         working = true; message = "Checking for updates…"
         scope.launch {
             try {
@@ -61,6 +57,7 @@ class AppUpdates(private val scope: CoroutineScope) {
     }
     fun download() {
         if (unavailableReason != null) return
+        val updater = updater ?: return
         val info = available ?: return
         if (working) return
         working = true
@@ -77,6 +74,7 @@ class AppUpdates(private val scope: CoroutineScope) {
     }
     fun restart(busy: Boolean) {
         if (busy || working || unavailableReason != null) return
+        val updater = updater ?: return
         val file = downloaded ?: return
         working = true
         scope.launch {
