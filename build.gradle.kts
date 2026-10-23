@@ -1,5 +1,6 @@
 import dev.nucleusframework.desktop.application.dsl.TargetFormat
 import dev.nucleusframework.desktop.application.dsl.PublishMode
+import dev.nucleusframework.desktop.application.tasks.AbstractJPackageTask
 plugins {
     kotlin("jvm") version "2.4.0"
     kotlin("plugin.compose") version "2.4.0"
@@ -10,6 +11,7 @@ plugins {
     id("com.google.protobuf") version "0.10.0"
 }
 val buildVersion = project.version.toString()
+val macBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orElse("1").get()
 require(buildVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) { "Set a stable version in package.yml" }
 tasks.processResources {
     inputs.property("buildVersion", buildVersion)
@@ -77,7 +79,7 @@ nucleus {
             macOS {
                 bundleID = "com.alexstyl.avdbuddy"
                 minimumSystemVersion = "12.0"
-                packageBuildVersion = buildVersion
+                packageBuildVersion = macBuildNumber
                 signing {
                     sign.set(providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY").isPresent)
                     identity.set(providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY"))
@@ -86,6 +88,27 @@ nucleus {
                     keychainProfile.set(providers.environmentVariable("AVDBUDDY_NOTARY_PROFILE"))
                     keychainPath.set(providers.environmentVariable("AVDBUDDY_NOTARY_KEYCHAIN"))
                 }
+            }
+        }
+    }
+}
+
+// jpackage rejects 0.x app versions. Use the build number for its input, then
+// restore the public version and re-sign the outer bundle before packaging it.
+if (System.getProperty("os.name").startsWith("Mac") && buildVersion.startsWith("0.")) {
+    tasks.withType<AbstractJPackageTask>().matching { it.name == "createDistributable" }.configureEach {
+        packageVersion.set(macBuildNumber)
+        inputs.property("publicAppVersion", buildVersion)
+        doLast {
+            val bundle = layout.buildDirectory.dir("compose/binaries/main/app/AvdBuddy.app").get().asFile
+            providers.exec {
+                commandLine("/usr/libexec/PlistBuddy", "-c", "Set :CFBundleShortVersionString $buildVersion", bundle.resolve("Contents/Info.plist").absolutePath)
+            }.result.get().assertNormalExitValue()
+            val identity = providers.environmentVariable("AVDBUDDY_MAC_SIGN_IDENTITY")
+            if (identity.isPresent) {
+                providers.exec {
+                    commandLine("/usr/bin/codesign", "--force", "--timestamp", "--preserve-metadata=identifier,entitlements,requirements,flags,runtime", "--sign", identity.get(), bundle.absolutePath)
+                }.result.get().assertNormalExitValue()
             }
         }
     }
