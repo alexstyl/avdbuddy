@@ -156,7 +156,7 @@ These commands only build local artifacts; they do not publish a GitHub release.
 
 The installer formats are DMG/ZIP on macOS, NSIS on Windows, and AppImage on
 Linux. Official downloads are at https://avdbuddy.com/download. The current
-distribution targets Apple silicon on macOS and x64 on Windows/Linux.
+distribution targets Apple silicon and Intel on macOS, and x64 on Windows/Linux.
 
 Installed builds check for updates through https://licenses.avdbuddy.com and
 download installers from https://downloads.avdbuddy.com. Downloads are verified
