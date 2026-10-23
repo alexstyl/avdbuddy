@@ -84,6 +84,7 @@ nucleus {
                 }
                 notarization {
                     keychainProfile.set(providers.environmentVariable("AVDBUDDY_NOTARY_PROFILE"))
+                    keychainPath.set(providers.environmentVariable("AVDBUDDY_NOTARY_KEYCHAIN"))
                 }
             }
         }
