@@ -141,8 +141,6 @@ spectre detach <session-id>
 ```
 
 Interactive actions operate on the actual running app and its real devices.
-The last attach check encountered a Spectre session error; interactive attachment
-still needs troubleshooting.
 
 ## Packaging
 
@@ -151,8 +149,9 @@ still needs troubleshooting.
 ./gradlew packageDmg packageZip
 ```
 
-The `.app` is in `build/compose/binaries/main/app/`. Nucleus packages the DMG,
-ZIP and `latest-mac.yml` update metadata beneath `build/compose/binaries/main/`.
+The `.app` is in `build/compose/binaries/main/app/`. Nucleus packages the DMG
+and ZIP beneath `build/compose/binaries/main/`. Release publishing generates
+the Nucleus-compatible update metadata after signing and notarization.
 These commands only build local artifacts; they do not publish a GitHub release.
 
 The installer formats are DMG/ZIP on macOS, NSIS on Windows, and AppImage on
