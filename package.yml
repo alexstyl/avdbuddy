@@ -12,3 +12,5 @@ dependencies:
   - io.grpc:grpc-protobuf:1.85.0
   - org.yaml:snakeyaml:2.5
   - org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0
+  - com.composables:composeunstyled-drawer:2.10.1
+  - com.composables:composeunstyled-dialog:2.10.1

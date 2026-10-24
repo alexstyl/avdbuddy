@@ -1,5 +1,9 @@
 package com.avdbuddy
 
+import com.avdbuddy.iconography.icon
+import com.avdbuddy.iconography.Icons
+import com.avdbuddy.iconography.ArrowPath
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
@@ -9,6 +13,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.typography
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.draw.clip
@@ -19,8 +26,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable fun EmulatorPanel(device: Device, state: AppState) {
     val running = device.name in state.running
     val starting = device.name in state.starting && !running
@@ -31,7 +41,7 @@ import androidx.compose.ui.unit.*
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(device.type.label.lowercase(), modifier = Modifier.size(48.dp))
+            Icon(device.type.icon, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(20.dp))
             Label(device.displayName,
                 modifier = Modifier.testTag("PreviewDeviceName"))
@@ -116,14 +126,13 @@ import androidx.compose.ui.unit.*
     val frameTint = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
 
     Column(Modifier.fillMaxSize().testTag("EmulatorPanel")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal=24.dp, vertical=18.dp), verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Label(device.displayName, modifier=Modifier.testTag("PreviewDeviceName"))
-                Spacer(Modifier.height(3.dp))
-                Label(androidFamilyTitle(device.api), color=JewelTheme.globalColors.text.info)
-            }
+        Column(Modifier.fillMaxWidth().padding(start=24.dp, end=24.dp, bottom=12.dp)) {
+            Text(device.displayName, modifier=Modifier.testTag("PreviewDeviceName"),
+                style=JewelTheme.typography.h4TextStyle, maxLines=1, overflow=TextOverflow.Ellipsis)
+            Spacer(Modifier.height(3.dp))
+            Label(androidFamilyTitle(device.api), color=JewelTheme.globalColors.text.info)
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal=30.dp, vertical=10.dp), contentAlignment=Alignment.Center) {
             val bezel = 9.dp
             // Keep one physical surface; its scale and touch coordinates never
             // change when it turns. The parent transform maps pointer positions.
@@ -187,6 +196,16 @@ import androidx.compose.ui.unit.*
                 artwork?.let {
                     Image(it, "${hardware?.name} frame", Modifier.matchParentSize(),
                         contentScale = ContentScale.FillBounds, colorFilter = frameTint)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
+            org.jetbrains.jewel.ui.component.Tooltip(tooltip = { Text("Rotate clockwise") }) {
+                org.jetbrains.jewel.ui.component.OutlinedButton(
+                    onClick = { state.rotateCurrent(clockwise = true) },
+                    modifier = Modifier.testTag("RotateClockwise").semantics { contentDescription = "Rotate clockwise" },
+                ) {
+                    Icon(Icons.ArrowPath)
                 }
             }
         }

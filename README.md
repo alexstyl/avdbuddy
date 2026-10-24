@@ -33,6 +33,7 @@ JBR 25, which Jewel requires. Xcode is not required for development.
 
 ## Features
 
+- One application window, with in-app dialogs for settings, device actions, licensing, updates, and folder selection
 - Device sidebar and a large, framed emulator preview
 - Select devices without starting them; stopped devices show their icon, name, and a Start button
 - Central Play button boots/resumes the selected device; new launches run inside the app without a separate emulator window
@@ -46,7 +47,7 @@ JBR 25, which Jewel requires. Xcode is not required for development.
 - SDK and emulator storage settings, with SDK validation and unavailable-drive errors
 - Running-device detection
 - Diagnostics and Nucleus automatic update checks
-- Keyboard shortcuts: Cmd on macOS, Ctrl on Windows/Linux; N to create, comma for Settings, Backspace to delete, and left/right arrows to rotate
+- Keyboard shortcuts: Cmd on macOS, Ctrl on Windows/Linux; B to toggle the sidebar, N to create, comma for Settings, Backspace to delete, and left/right arrows to rotate
 
 On macOS, Settings imports SDK and AVD folder preferences from the previous Swift
 app on first use. Saved settings and update preferences use native config folders:

@@ -166,6 +166,8 @@ class AppState(val scope: CoroutineScope, private val store: SettingsStore = Set
     var catalogLoading by mutableStateOf(false); private set
     var catalogError by mutableStateOf(""); private set
     var showSettings by mutableStateOf(false)
+    val hasOpenDialog get() = showSettings || showCreate || showAbout || renameDevice != null ||
+        deleteDevices.isNotEmpty() || updates.visible || license.visible
     var showCreate by mutableStateOf(false)
     var showAbout by mutableStateOf(false)
     var renameDevice by mutableStateOf<Device?>(null)

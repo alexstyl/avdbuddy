@@ -3,22 +3,23 @@ package com.avdbuddy
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import androidx.compose.ui.*
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.geometry.*
-import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.avdbuddy.iconography.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
@@ -28,13 +29,20 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import org.jetbrains.jewel.ui.component.*
+import org.jetbrains.jewel.ui.component.styling.SimpleListItemStyle
+import org.jetbrains.jewel.ui.component.styling.SimpleListItemMetrics
+import org.jetbrains.jewel.ui.theme.simpleListItemStyle
+import org.jetbrains.jewel.ui.typography
 import org.jetbrains.jewel.ui.Orientation
-import java.awt.Desktop
-import java.awt.FileDialog
-import java.awt.Frame
-import java.io.File
-import java.net.URI
-import javax.swing.JFileChooser
+import com.composeunstyled.DrawerPlacement
+import com.composeunstyled.DrawerPresentation
+import com.composeunstyled.DrawerSnapPoint
+import com.composeunstyled.DrawerSnapPoints
+import com.composeunstyled.Panel
+import com.composeunstyled.UnstyledDrawer
+import com.composeunstyled.UnstyledDrawerState
+import com.composeunstyled.Viewport
+import com.composeunstyled.DialogHost
 
 fun main(args: Array<String>) {
     if ("--diagnostics" in args) {
@@ -48,11 +56,14 @@ fun main(args: Array<String>) {
     application {
         val scope = rememberCoroutineScope()
         val state = remember { AppState(scope) }
+        val drawerState = rememberSidebarDrawerState()
         Window(
             onCloseRequest = ::exitApplication,
             title = APP_NAME,
             state = rememberWindowState(width = 1040.dp, height = 720.dp),
-            onPreviewKeyEvent = { event -> handleMainWindowShortcut(event, state) },
+            onPreviewKeyEvent = { event ->
+                handleMainWindowShortcut(event, state) { drawerState.targetValue = !drawerState.targetValue }
+            },
         ) {
             window.minimumSize = java.awt.Dimension(760, 540)
             val isMacOS = System.getProperty("os.name").startsWith("Mac")
@@ -63,18 +74,21 @@ fun main(args: Array<String>) {
                 window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
             }
             AvdBuddyTheme {
-                App(state, topInset = if (isMacOS) 28.dp else 0.dp)
+                DialogHost {
+                    App(state, topInset = if (isMacOS) 28.dp else 0.dp, drawerState = drawerState)
+                }
             }
         }
     }
 }
 
 // Handle shortcuts before focused content, including the emulator and text fields.
-private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean {
-    if (event.type != KeyEventType.KeyDown || state.showCreate || state.deleteDevices.isNotEmpty()) return false
+private fun handleMainWindowShortcut(event: KeyEvent, state: AppState, toggleSidebar: () -> Unit): Boolean {
+    if (event.type != KeyEventType.KeyDown || state.hasOpenDialog) return false
     if (if (HostOs.detect() == HostOs.MAC) event.isMetaPressed else event.isCtrlPressed) when (event.key) {
         Key.DirectionRight -> return state.rotateCurrent(clockwise = true)
         Key.DirectionLeft -> return state.rotateCurrent(clockwise = false)
+        Key.B -> { toggleSidebar(); return true }
     }
     if (!event.isMetaPressed && !event.isCtrlPressed) return false
     return when (event.key) {
@@ -90,36 +104,13 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     Text(text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 @Composable fun Rule() { Divider(Orientation.Horizontal, Modifier.fillMaxWidth()) }
-@Composable fun Icon(name: String, tint: Color = JewelTheme.contentColor, modifier: Modifier = Modifier.size(18.dp)) {
-    val iconBackground = JewelTheme.globalColors.panelBackground
-    Canvas(modifier) {
-        val s = size.width / 24f
-        fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(tint, Offset(x1*s,y1*s), Offset(x2*s,y2*s), 1.6f*s, StrokeCap.Round)
-        fun rect(x: Float, y: Float, w: Float, h: Float, r: Float = 2f) = drawRoundRect(tint, Offset(x*s,y*s), Size(w*s,h*s), CornerRadius(r*s), style = Stroke(1.6f*s))
-        when(name) {
-            "plus" -> { line(12f,5f,12f,19f); line(5f,12f,19f,12f) }
-            "play" -> drawPath(Path().apply { moveTo(8*s,4*s); lineTo(20*s,12*s); lineTo(8*s,20*s); close() }, tint)
-            "stop" -> drawRoundRect(tint, Offset(6*s,6*s), Size(12*s,12*s), CornerRadius(2*s))
-            "settings" -> { for(y in listOf(6f,12f,18f)) line(3f,y,21f,y); for((x,y) in listOf(8f to 6f,16f to 12f,10f to 18f)) { drawCircle(iconBackground,2.5f*s,Offset(x*s,y*s)); drawCircle(tint,2.5f*s,Offset(x*s,y*s),style=Stroke(1.5f*s)) } }
-            "refresh" -> { drawArc(tint, -50f, 285f, false, Offset(4*s,4*s), Size(16*s,16*s),style=Stroke(1.6f*s)); line(20f,3f,20f,9f); line(15f,9f,20f,9f) }
-            "more" -> for(x in listOf(5f,12f,19f)) drawCircle(tint,1.5f*s,Offset(x*s,12*s))
-            "close" -> { line(6f,6f,18f,18f); line(6f,18f,18f,6f) }
-            "back" -> { line(15f,5f,8f,12f); line(8f,12f,15f,19f) }
-            "check" -> { line(5f,12f,10f,17f); line(10f,17f,20f,6f) }
-            "folder" -> { rect(3f,7f,18f,14f); line(3f,7f,3f,4f); line(3f,4f,10f,4f); line(10f,4f,13f,7f) }
-            "download" -> { line(12f,3f,12f,15f); line(7f,10f,12f,15f); line(12f,15f,17f,10f); line(4f,17f,4f,21f); line(4f,21f,20f,21f); line(20f,21f,20f,17f) }
-            "info" -> { drawCircle(tint,9*s,center,style=Stroke(1.6f*s)); line(12f,10f,12f,17f); drawCircle(tint,1*s,Offset(12*s,7*s)) }
-            "tablet", "tv", "desktop", "automotive" -> { rect(2f,5f,20f,14f); line(9f,22f,15f,22f); line(12f,19f,12f,22f) }
-            "wear os" -> { rect(6f,6f,12f,12f,5f); line(9f,2f,15f,2f); line(9f,22f,15f,22f) }
-            "disk" -> { rect(3f,6f,18f,13f); line(3f,14f,21f,14f); drawCircle(tint,s,Offset(17*s,17*s)) }
-            else -> { rect(6f,2f,12f,20f,3f); line(10f,5f,14f,5f); line(10f,19f,14f,19f) }
-        }
-    }
+@Composable fun Icon(icon: ImageVector, tint: Color = JewelTheme.contentColor, modifier: Modifier = Modifier.size(18.dp)) {
+    Image(icon, contentDescription = null, modifier = modifier, colorFilter = ColorFilter.tint(tint))
 }
-@Composable fun IconButton(name: String, description: String, tag: String = description, enabled: Boolean = true, onClick: () -> Unit) {
+@Composable fun IconButton(icon: ImageVector, description: String, tag: String = description, enabled: Boolean = true, onClick: () -> Unit) {
     Tooltip(tooltip = { Text(description) }) {
         org.jetbrains.jewel.ui.component.IconButton(onClick, enabled = enabled,
-            modifier = Modifier.testTag(tag).semantics { contentDescription = description }) { Icon(name) }
+            modifier = Modifier.testTag(tag).semantics { contentDescription = description }) { Icon(icon) }
     }
 }
 @Composable fun ActionButton(text: String, primary: Boolean = false, enabled: Boolean = true, tag: String = text, onClick: () -> Unit) {
@@ -127,76 +118,146 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     else OutlinedButton(onClick, Modifier.testTag(tag), enabled = enabled) { Text(text) }
 }
 
-@Composable fun App(state: AppState, autoRefresh: Boolean = true, topInset: Dp = 0.dp) {
+@Composable private fun rememberSidebarDrawerState(): UnstyledDrawerState<Boolean> = remember {
+    UnstyledDrawerState(
+        initialValue = true,
+        snapPoints = DrawerSnapPoints {
+            false at DrawerSnapPoint.Zero
+            true at DrawerSnapPoint.ContentSize
+        },
+    )
+}
+
+@Composable fun App(state: AppState, autoRefresh: Boolean = true, topInset: Dp = 0.dp,
+                    drawerState: UnstyledDrawerState<Boolean> = rememberSidebarDrawerState()) {
+    val headerHeight = maxOf(topInset, 32.dp)
     LaunchedEffect(state) { state.observeDisplays() }
     LaunchedEffect(state, autoRefresh) {
         if (autoRefresh) { state.refresh(); while (isActive) { delay(3000); state.refresh() } }
     }
     Box(Modifier.fillMaxSize()) {
-    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).focusProperties { canFocus = !state.showCreate && state.deleteDevices.isEmpty() }
-        .then(if (state.showCreate || state.deleteDevices.isNotEmpty()) Modifier.clearAndSetSemantics { } else Modifier).testTag("DeviceShelf")) {
-        // Extend the sidebar and divider to the window edge, with controls below the traffic lights.
-        Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.panelBackground).testTag("DeviceSidebar").padding(top = topInset)) {
-            Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp), verticalAlignment=Alignment.CenterVertically) {
-                Label("Devices", color=JewelTheme.globalColors.text.info)
-                Spacer(Modifier.weight(1f))
-                IconButton("plus", "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
-            }
-            val sidebarDevices = state.visibleDevices.sortedWith(
-                compareBy<Device> { it.name !in state.running }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.displayName }
-                    .thenBy { it.name }
-            )
-            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) false
-                else if ((event.isMetaPressed || event.isCtrlPressed) && event.key == Key.A) {
-                    state.selected = sidebarDevices.map { it.name }.toSet()
-                    true
-                } else if (event.key == Key.DirectionUp || event.key == Key.DirectionDown) {
-                    val current = sidebarDevices.indexOfFirst { it.name == state.previewDevice?.name }
-                    val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (sidebarDevices.size - 1).coerceAtLeast(0))
-                    sidebarDevices.getOrNull(next)?.let { state.selectDevice(it, extend = event.isShiftPressed, orderedNames = sidebarDevices.map { it.name }) }
-                    true
-                } else false
-            }, contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp), verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                items(sidebarDevices.size, key={sidebarDevices[it].name}) { index ->
-                    Box(Modifier.animateItem()) {
-                        DeviceRow(sidebarDevices[index], state, sidebarDevices.map { it.name })
+    Box(Modifier.fillMaxSize().background(Color(0xFFF1F1F1)).testTag("DeviceShelf")) {
+        UnstyledDrawer(
+            state = drawerState,
+            placement = DrawerPlacement.Start,
+            presentation = DrawerPresentation.InPlace,
+            dismissOnClickOutside = false,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Viewport<Boolean>(Modifier.fillMaxSize()) {
+                Panel(Modifier.width(270.dp).fillMaxHeight()) {
+                    Box(Modifier.fillMaxSize().background(Color(0xFFF1F1F1))) {
+                        DeviceSidebar(state, headerHeight, Modifier.fillMaxWidth())
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
-                IconButton("settings", "Settings", "Settings", !state.busy) { state.showSettings=true }
-                IconButton("refresh", "Refresh devices", "Refresh", !state.busy) { state.refreshAsync() }
-                Spacer(Modifier.weight(1f))
-                ActionButton(if (state.license.licensed) "Licensed" else "Unlicensed", tag="LicenseStatus") { state.license.visible=true }
-                IconButton("info", "About AvdBuddy", "About") { state.showAbout=true }
-            }
         }
-        Divider(Orientation.Vertical, Modifier.fillMaxHeight())
-        Box(Modifier.weight(1f).fillMaxHeight().padding(top = topInset)) {
+        Box(Modifier.fillMaxSize()
+            .padding(start = with(LocalDensity.current) { drawerState.offset.toDp() })
+            .then(if (drawerState.offset > 0f) Modifier.clip(RoundedCornerShape(8.dp))
+                .border(1.dp, Color(0xFFD6D6D6), RoundedCornerShape(8.dp)) else Modifier)
+            .background(Color.White)
+            .padding(top = headerHeight)) {
             val device = state.previewDevice
-            if (device != null) EmulatorPanel(device, state)
+            if (state.selected.size > 1) {
+                Box(Modifier.fillMaxSize().testTag("MultipleDevicesSelected"), contentAlignment = Alignment.Center) {
+                    Label("Multiple devices selected", color = JewelTheme.globalColors.text.info)
+                }
+            } else if (device != null) EmulatorPanel(device, state)
             else Column(Modifier.fillMaxSize().testTag("EmptyShelf"), verticalArrangement=Arrangement.Center, horizontalAlignment=Alignment.CenterHorizontally) {
-                Icon("phone", modifier=Modifier.size(48.dp))
+                Icon(Icons.DevicePhoneMobile, modifier=Modifier.size(48.dp))
                 Spacer(Modifier.height(20.dp)); Label("Your next Android device")
                 Spacer(Modifier.height(10.dp)); Label("Create a device to see it here.", color=JewelTheme.globalColors.text.info)
                 Spacer(Modifier.height(24.dp)); ActionButton("Create a device", primary=true, tag="EmptyCreate") { if(state.ready) state.resetCreate() else state.showSettings=true }
             }
         }
     }
-    if(state.showCreate) CreateDeviceDialog(state)
-    if(state.deleteDevices.isNotEmpty()) DeleteWindow(state)
+    Row(
+        Modifier.align(Alignment.TopStart)
+            .width(maxOf(with(LocalDensity.current) { drawerState.offset.toDp() }, if (topInset > 0.dp) 136.dp else 64.dp))
+            .height(headerHeight).padding(end = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(Icons.ViewColumns, if (drawerState.targetValue) "Hide sidebar" else "Show sidebar", "ToggleSidebar") {
+            drawerState.targetValue = !drawerState.targetValue
+        }
+        IconButton(Icons.Plus, "Create a virtual device", "CreateDevice", !state.busy) { if(state.ready) state.resetCreate() else state.showSettings=true }
     }
-    if(state.showSettings) SettingsWindow(state)
+    if(state.showCreate) CreateDeviceDialog(state)
+    if(state.deleteDevices.isNotEmpty()) DeleteDevicesDialog(state)
+    }
+    if(state.showSettings) SettingsDialog(state)
     LaunchedEffect(state, autoRefresh) { if (autoRefresh) state.updates.monitor() }
-    if(state.updates.visible) UpdatesWindow(state)
-    if(state.license.visible) LicenseWindow(state.license)
-    if(state.showAbout) AboutWindow(state)
-    state.renameDevice?.let { device -> RenameWindow(state,device) }
+    if(state.showAbout) AboutDialog(state)
+    if(state.updates.visible) UpdatesDialog(state)
+    if(state.license.visible) LicenseDialog(state.license)
+    state.renameDevice?.let { device -> RenameDeviceDialog(state,device) }
+}
+
+@Composable private fun DeviceSidebar(state: AppState, topInset: Dp, modifier: Modifier = Modifier) {
+    val searchField = rememberTextFieldState()
+    val query = searchField.text.toString().trim()
+    Column(modifier.fillMaxHeight().testTag("DeviceSidebar").padding(top = topInset)) {
+        TextField(
+            state = searchField,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(top = 8.dp, bottom = 4.dp)
+                .testTag("DeviceSearch").semantics { contentDescription = "Search devices" },
+            placeholder = { Text("Search devices") },
+            leadingIcon = { Icon(Icons.MagnifyingGlass, tint = JewelTheme.globalColors.text.info, modifier = Modifier.size(18.dp).testTag("DeviceSearchIcon")) },
+            trailingIcon = if (searchField.text.isNotEmpty()) {
+                { IconButton(Icons.XMark, "Clear search", "ClearDeviceSearch") { searchField.setTextAndPlaceCursorAtEnd("") } }
+            } else null,
+        )
+        val sidebarDevices = state.visibleDevices.filter { it.displayName.contains(query, ignoreCase = true) }.sortedWith(
+            compareBy<Device> { it.name !in state.running }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.displayName }
+                .thenBy { it.name }
+        )
+        val orderedNames = sidebarDevices.map { it.name }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) false
+            else if ((event.isMetaPressed || event.isCtrlPressed) && event.key == Key.A) {
+                state.selected = orderedNames.toSet()
+                true
+            } else if (event.key == Key.DirectionUp || event.key == Key.DirectionDown) {
+                val current = sidebarDevices.indexOfFirst { it.name == state.previewDevice?.name }
+                val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (sidebarDevices.size - 1).coerceAtLeast(0))
+                sidebarDevices.getOrNull(next)?.let { state.selectDevice(it, extend = event.isShiftPressed, orderedNames = orderedNames) }
+                true
+            } else false
+        }, contentPadding=PaddingValues(horizontal=8.dp, vertical=4.dp)) {
+            if (sidebarDevices.isEmpty() && query.isNotEmpty()) {
+                item {
+                    Label("No matching devices", modifier = Modifier.padding(8.dp).testTag("NoDeviceMatches"),
+                        color = JewelTheme.globalColors.text.info)
+                }
+            }
+            items(sidebarDevices.size, key={sidebarDevices[it].name}) { index ->
+                Box(Modifier.animateItem()) {
+                    DeviceRow(sidebarDevices[index], state, orderedNames)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment=Alignment.CenterVertically) {
+            IconButton(Icons.Cog6Tooth, "Settings", "Settings", !state.busy) { state.showSettings=true }
+            Spacer(Modifier.weight(1f))
+            ActionButton(if (state.license.licensed) "Licensed" else "Unlicensed", tag="LicenseStatus") { state.license.visible=true }
+            IconButton(Icons.InformationCircle, "About AvdBuddy", "About") { state.showAbout=true }
+        }
+    }
 }
 
 @Composable private fun DeviceRow(device: Device, state: AppState, orderedNames: List<String>) {
+    val baseStyle = JewelTheme.simpleListItemStyle
+    val itemStyle = remember(baseStyle) {
+        SimpleListItemStyle(baseStyle.colors, SimpleListItemMetrics(
+            innerPadding = baseStyle.metrics.innerPadding,
+            outerPadding = PaddingValues(0.dp),
+            selectionBackgroundCornerSize = CornerSize(8.dp),
+            iconTextGap = baseStyle.metrics.iconTextGap,
+        ))
+    }
     val selected = device.name in state.selected
     val running = device.name in state.running
     val pending = state.pendingCreation?.name == device.name
@@ -238,8 +299,8 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
             }
         }
     }) {
-        SimpleListItem(selected = selected, height = 56.dp,
-            modifier = Modifier.fillMaxWidth().testTag("Device-${device.name}")
+        SimpleListItem(selected = selected, height = 56.dp, style = itemStyle,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).testTag("Device-${device.name}")
                 .semantics { contentDescription="${device.displayName}, $subtitle"; this.selected = selected }
                 .onPointerEvent(PointerEventType.Press, pass = PointerEventPass.Initial) { event ->
                     if (event.buttons.isPrimaryPressed) {
@@ -252,12 +313,18 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
                     clickModifiers = PointerKeyboardModifiers()
                 }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-                Icon(device.type.label.lowercase(), tint = if (running) Color(0xFF2E7D32) else JewelTheme.globalColors.text.info)
+                Box(
+                    Modifier.size(30.dp).background(if (running) Color.White else Color(0xFFE1E1E1), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(device.type.icon, tint = if (running) Color(0xFF2E7D32) else JewelTheme.globalColors.text.info)
+                }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Label(device.displayName, maxLines=1)
-                    Spacer(Modifier.height(4.dp))
-                    Label(subtitle, color=JewelTheme.globalColors.text.info, maxLines=1)
+                    Spacer(Modifier.height(2.dp))
+                    Text(subtitle, color=JewelTheme.globalColors.text.info, style=JewelTheme.typography.small,
+                        maxLines=1, overflow=TextOverflow.Ellipsis)
                 }
                 if(operation != null && (!pending || state.creating)) {
                     Spacer(Modifier.width(10.dp))
@@ -268,7 +335,7 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
     }
 }
 
-@Composable fun Section(title: String, icon: String = "settings", subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun Section(title: String, icon: ImageVector = Icons.Cog6Tooth, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
             Icon(icon,modifier=Modifier.size(15.dp));Spacer(Modifier.width(9.dp));Label(title)
@@ -285,17 +352,4 @@ private fun handleMainWindowShortcut(event: KeyEvent, state: AppState): Boolean 
 }
 @Composable fun <T> Select(value:T,options:List<T>,onChange:(T)->Unit,label:(T)->String={it.toString()},tag:String="Select",modifier:Modifier=Modifier.widthIn(min=130.dp,max=300.dp)) {
     Dropdown(modifier=modifier.testTag(tag),menuContent={options.forEach { option -> selectableItem(selected=option==value,onClick={onChange(option)}) { Text(label(option)) } }}) { Text(label(value),maxLines=1) }
-}
-fun chooseDirectory(current:String):String? {
-    if(System.getProperty("os.name").contains("Mac")) {
-        val old=System.getProperty("apple.awt.fileDialogForDirectories")
-        return try {
-            System.setProperty("apple.awt.fileDialogForDirectories","true")
-            val dialog=FileDialog(null as Frame?,"Choose folder",FileDialog.LOAD)
-            dialog.directory=expandPath(current).path;dialog.isVisible=true
-            val result=dialog.file?.let { File(dialog.directory,it).absolutePath };dialog.dispose();result
-        } finally { if(old==null)System.clearProperty("apple.awt.fileDialogForDirectories") else System.setProperty("apple.awt.fileDialogForDirectories",old) }
-    }
-    val chooser=JFileChooser(expandPath(current));chooser.fileSelectionMode=JFileChooser.DIRECTORIES_ONLY
-    return if(chooser.showOpenDialog(null)==JFileChooser.APPROVE_OPTION) chooser.selectedFile.path else null
 }
